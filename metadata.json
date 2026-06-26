@@ -1,0 +1,6 @@
+{
+  "name": "TeenLaunch",
+  "description": "Find scholarships, internships, competitions, and programs tailored to your goals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

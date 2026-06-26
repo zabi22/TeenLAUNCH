@@ -1,0 +1,1912 @@
+import express from "express";
+import path from "path";
+import { createServer as createViteServer } from "vite";
+import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
+import { db } from "./src/db/index.ts";
+import { opportunities, bookmarks, users, academicProfiles, applications, activities, posts, postReactions, postComments, connections, notifications, verificationRequests } from "./src/db/schema.ts";
+import { getOrCreateUser } from "./src/db/users.ts";
+import { eq, desc, and, lt, or } from "drizzle-orm";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+
+let geminiAi: GoogleGenAI | null = null;
+function getGeminiAi() {
+  if (!geminiAi) {
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn("GEMINI_API_KEY not set.");
+    }
+    geminiAi = new GoogleGenAI({ 
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+  return geminiAi;
+}
+
+async function fallbackToGroq(systemInstruction: string, history: any[], message: string, isJson: boolean = false): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("GROQ_API_KEY not set");
+
+  const messages = [
+    { role: "system", content: systemInstruction },
+    ...history.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text })),
+    { role: "user", content: message }
+  ];
+
+  const groqModels = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768"
+  ];
+
+  let lastError = null;
+  for (const model of groqModels) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          response_format: isJson ? { type: "json_object" } : undefined
+        })
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Groq API error (${model}): ${res.status} ${text}`);
+      }
+      
+      const data = await res.json();
+      return data.choices[0].message.content;
+    } catch (err) {
+      lastError = err;
+      console.warn(`[AI Provider] Groq model ${model} failed, trying next...`);
+    }
+  }
+
+  throw lastError || new Error("All Groq models failed");
+}
+
+async function fallbackToOpenRouter(systemInstruction: string, history: any[], message: string, isJson: boolean = false): Promise<string> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY not set");
+
+  const messages = [
+    { role: "system", content: systemInstruction },
+    ...history.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text })),
+    { role: "user", content: message }
+  ];
+
+  const modelsToTry = [
+    "google/gemma-4-31b-it:free",  // Preferred 1
+    "qwen/qwen3-coder:free",       // Preferred 2
+    "openai/gpt-oss-120b:free",    // Preferred 3
+    "qwen/qwen-2.5-coder-32b-instruct:free", // Active free coding model
+    "google/gemma-2-9b-it:free",             // Active free Gemma
+    "meta-llama/llama-3.1-8b-instruct:free", // Active free Llama
+    "deepseek/deepseek-r1:free",             // Active free DeepSeek R1
+    "mistralai/mistral-7b-instruct:free"     // Active free Mistral
+  ];
+
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://teenlaunch.app", 
+          "X-Title": "TeenLaunch"
+        },
+        body: JSON.stringify({
+          model: model,
+          messages,
+          response_format: isJson ? { type: "json_object" } : undefined
+        })
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`OpenRouter API error (${model}): ${res.status} ${text}`);
+      }
+      
+      const data = await res.json();
+      return data.choices[0].message.content;
+    } catch (err) {
+      lastError = err;
+      console.warn(`[AI Provider] OpenRouter model ${model} failed, trying next...`);
+    }
+  }
+
+  throw lastError || new Error("All OpenRouter free models failed");
+}
+
+function cleanAndParseJson(text: string): any {
+  let cleaned = text.trim();
+  
+  if (cleaned.startsWith("```")) {
+    const firstNewline = cleaned.indexOf("\n");
+    if (firstNewline !== -1) {
+      cleaned = cleaned.substring(firstNewline + 1);
+    } else {
+      cleaned = cleaned.replace(/^```(json)?/i, "");
+    }
+    cleaned = cleaned.replace(/```$/, "").trim();
+  }
+  
+  const firstBrace = cleaned.indexOf("{");
+  const firstBracket = cleaned.indexOf("[");
+  let startIdx = -1;
+  let endIdx = -1;
+  
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIdx = firstBrace;
+    endIdx = cleaned.lastIndexOf("}");
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = cleaned.lastIndexOf("]");
+  }
+  
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    cleaned = cleaned.substring(startIdx, endIdx + 1);
+  }
+  
+  return JSON.parse(cleaned);
+}
+
+export async function generateChatContent(
+  systemInstruction: string,
+  history: any[],
+  message: string
+): Promise<string> {
+  try {
+     const aiClient = getGeminiAi();
+     const formattedHistory = history ? history.map((msg: any) => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      })) : [];
+      
+      const chat = aiClient.chats.create({
+        model: "gemini-3.1-pro-preview",
+        history: formattedHistory,
+        config: {
+          systemInstruction,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+        }
+      });
+      const response = await chat.sendMessage({ message });
+      console.log("[AI Provider] Handled by: Gemini API");
+      return response.text;
+  } catch (geminiError) {
+     console.error("[AI Provider] Gemini failed, trying Groq:", geminiError);
+     try {
+       const response = await fallbackToGroq(systemInstruction, history, message, false);
+       console.log("[AI Provider] Handled by: Groq API");
+       return response;
+     } catch (groqError) {
+       console.error("[AI Provider] Groq failed, trying OpenRouter:", groqError);
+       const response = await fallbackToOpenRouter(systemInstruction, history, message, false);
+       console.log("[AI Provider] Handled by: OpenRouter API");
+       return response;
+     }
+  }
+}
+
+export async function generateContentManager(
+  systemInstruction: string,
+  prompt: string,
+  isJson: boolean = false
+): Promise<string> {
+   try {
+     const aiClient = getGeminiAi();
+     const response = await aiClient.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          responseMimeType: isJson ? "application/json" : "text/plain",
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+        }
+      });
+      console.log("[AI Provider] Handled by: Gemini API");
+      return response.text.trim();
+   } catch (geminiError) {
+     console.error("[AI Provider] Gemini failed, trying Groq:", geminiError);
+     try {
+       const response = await fallbackToGroq(systemInstruction, [], prompt, isJson);
+       console.log("[AI Provider] Handled by: Groq API");
+       return response;
+     } catch (groqError) {
+       console.error("[AI Provider] Groq failed, trying OpenRouter:", groqError);
+       const response = await fallbackToOpenRouter(systemInstruction, [], prompt, isJson);
+       console.log("[AI Provider] Handled by: OpenRouter API");
+       return response;
+     }
+   }
+}
+
+async function seedOpportunitiesIfEmpty() {
+  try {
+    const existing = await db.select().from(opportunities).limit(1);
+    if (existing.length > 0) {
+      console.log("Opportunities database already seeded.");
+      return;
+    }
+
+    console.log("Seeding initial high-quality opportunities across multiple countries...");
+    const seedData = [
+      // 1. Scholarships
+      {
+        title: "Coca-Cola Scholars Program Scholarship",
+        description: "An achievement-based scholarship awarded to graduating high school seniors. Students are recognized for their capacity to lead and serve, as well as their commitment to making a significant impact on their schools and communities.",
+        category: "Scholarships",
+        deadline: "2026-10-31",
+        location: "United States (Any)",
+        eligibility: "High school seniors with a minimum 3.0 GPA intending to pursue a degree at an accredited US post-secondary institution.",
+        applicationUrl: "https://www.coca-colascholarsfoundation.org/apply/",
+        organization: "Coca-Cola Scholars Foundation",
+        isRemote: true,
+        country: "United States",
+        region: null,
+        city: null,
+        gradeLevel: "12th Grade",
+        ageRequirement: "No age limit, high school senior",
+        isPaid: false,
+        programLength: "Academic Year"
+      },
+      {
+        title: "Schulich Leader Scholarships",
+        description: "Schulich Leader Scholarships are Canada's most coveted undergraduate STEM scholarships. Awarded to entrepreneurial-minded high school graduates enrolling in a Science, Technology, Engineering or Math program.",
+        category: "Scholarships",
+        deadline: "2026-02-15",
+        location: "Canada (Partner Universities)",
+        eligibility: "Canadian citizen or permanent resident, graduating high school, demonstrating academic excellence, leadership, and entrepreneurial profile.",
+        applicationUrl: "https://www.schulichleaders.com/",
+        organization: "Schulich Foundation",
+        isRemote: false,
+        country: "Canada",
+        region: null,
+        city: null,
+        gradeLevel: "12th Grade",
+        ageRequirement: "Under 21",
+        isPaid: false,
+        programLength: "4 Years"
+      },
+      {
+        title: "KVPY (Kishore Vaigyanik Protsahan Yojana) Fellowship",
+        description: "A highly prestigious national fellowship program in basic sciences, initiated and funded by the Department of Science and Technology of the Government of India, to attract exceptionally highly motivated students for pursuing basic science careers.",
+        category: "Scholarships",
+        deadline: "2026-09-30",
+        location: "India (Any)",
+        eligibility: "Indian students enrolled in XI, XII Standard or 1st year of UG courses in basic sciences with strong mathematical/scientific aptitude.",
+        applicationUrl: "http://kvpy.iisc.ac.in/",
+        organization: "Indian Institute of Science (IISc)",
+        isRemote: false,
+        country: "India",
+        region: null,
+        city: null,
+        gradeLevel: "11th Grade, 12th Grade",
+        ageRequirement: "15-19",
+        isPaid: false,
+        programLength: "Monthly Stipend"
+      },
+      // 2. Internships
+      {
+        title: "NASA High School Internship Program",
+        description: "NASA Office of STEM Engagement internships provide high school students with the opportunity to participate in research and development, engineering, or administrative projects alongside NASA scientists and mentors.",
+        category: "Internships",
+        deadline: "2026-03-01",
+        location: "Ames Research Center, CA",
+        eligibility: "US citizen, minimum 16 years of age, 3.0 cumulative GPA, currently enrolled in high school.",
+        applicationUrl: "https://intern.nasa.gov/",
+        organization: "NASA",
+        isRemote: false,
+        country: "United States",
+        region: "California",
+        city: "Mountain View",
+        gradeLevel: "11th Grade, 12th Grade",
+        ageRequirement: "16+",
+        isPaid: true,
+        programLength: "8 Weeks"
+      },
+      {
+        title: "KPMG Virtual STEM Internship",
+        description: "Gain invaluable experience working with one of the 'Big Four' accounting and consulting firms globally. Understand tech consulting, cybersecurity, and data analysis in a simulated workspace environment.",
+        category: "Internships",
+        deadline: "2026-12-31",
+        location: "Remote",
+        eligibility: "Open to high school and college students globally interested in technology and consulting.",
+        applicationUrl: "https://www.theforage.com/virtual-internships/theme/kpmg/stem",
+        organization: "KPMG",
+        isRemote: true,
+        country: "Global",
+        region: null,
+        city: null,
+        gradeLevel: "All",
+        ageRequirement: "No age limit",
+        isPaid: false,
+        programLength: "Self-Paced (approx 10 hours)"
+      },
+      {
+        title: "Tata Group High School Summer Internship",
+        description: "Gain hands-on corporate and technological project experience under Tata Consultancy Services. Work with engineering mentors on real-world industry problem solving.",
+        category: "Internships",
+        deadline: "2026-04-10",
+        location: "Mumbai, India",
+        eligibility: "Indian high school students in grades 10-12 interested in business strategy, software engineering, or data science.",
+        applicationUrl: "https://www.tata.com/careers",
+        organization: "Tata Group",
+        isRemote: false,
+        country: "India",
+        region: "Maharashtra",
+        city: "Mumbai",
+        gradeLevel: "10th Grade, 11th Grade, 12th Grade",
+        ageRequirement: "15+",
+        isPaid: true,
+        programLength: "6 Weeks"
+      },
+      // 3. Competitions
+      {
+        title: "Google Science Fair",
+        description: "A prestigious global online science and technology competition open to individuals and teams of teenagers from all over the world. Submit a research project to win scholarships and grand prizes.",
+        category: "Competitions",
+        deadline: "2026-05-15",
+        location: "Global",
+        eligibility: "Students aged 13 to 18 from any country around the world.",
+        applicationUrl: "https://www.googlesciencefair.com/",
+        organization: "Google",
+        isRemote: true,
+        country: "Global",
+        region: null,
+        city: null,
+        gradeLevel: "All",
+        ageRequirement: "13-18",
+        isPaid: false,
+        programLength: "Annual Competition"
+      },
+      {
+        title: "International Mathematical Olympiad (IMO)",
+        description: "The World Championship Mathematics Competition for High School students. Teams representing over 100 countries compete in rigorous multi-day mathematical examinations.",
+        category: "Competitions",
+        deadline: "2026-04-01",
+        location: "Varies",
+        eligibility: "Students must be nominated by their country's national mathematics association through qualifying exams.",
+        applicationUrl: "https://www.imo-official.org/",
+        organization: "IMO Foundation",
+        isRemote: false,
+        country: "Global",
+        region: null,
+        city: null,
+        gradeLevel: "All",
+        ageRequirement: "Under 20",
+        isPaid: false,
+        programLength: "2 Weeks"
+      },
+      {
+        title: "Regeneron Science Talent Search (STS)",
+        description: "The nation's oldest and most prestigious science and math competition for high school seniors. Awards millions of dollars in prizes annually to student scientists pursuing original scientific research.",
+        category: "Competitions",
+        deadline: "2026-11-12",
+        location: "Washington, D.C.",
+        eligibility: "High school seniors living in the US, or US citizens attending high schools abroad.",
+        applicationUrl: "https://www.societyforscience.org/regeneron-sts/",
+        organization: "Society for Science",
+        isRemote: false,
+        country: "United States",
+        region: null,
+        city: null,
+        gradeLevel: "12th Grade",
+        ageRequirement: "No age limit, high school senior",
+        isPaid: false,
+        programLength: "1 Week Finals"
+      },
+      // 4. Research Programs
+      {
+        title: "MIT Research Science Institute (RSI)",
+        description: "A highly selective, fully funded summer research program for high school students. It combines on-campus course work in scientific theory with off-campus work in science and technology research.",
+        category: "Research Programs",
+        deadline: "2026-01-15",
+        location: "MIT Campus, Cambridge, MA",
+        eligibility: "High school juniors (grade 11) with exceptional academic and scientific profiles from any country (domestic and international).",
+        applicationUrl: "https://www.cee.org/programs/research-science-institute",
+        organization: "Center for Excellence in Education",
+        isRemote: false,
+        country: "Global",
+        region: "Massachusetts",
+        city: "Cambridge",
+        gradeLevel: "11th Grade",
+        ageRequirement: "No age limit",
+        isPaid: true,
+        programLength: "6 Weeks"
+      },
+      {
+        title: "Stanford Institutes of Medicine Summer Research Program (SIMR)",
+        description: "An 8-week program in which high school students perform hands-on research with Stanford faculty, postdoctoral fellows, and researchers in medically-related fields.",
+        category: "Research Programs",
+        deadline: "2026-02-21",
+        location: "Stanford, CA",
+        eligibility: "US citizens or permanent residents, at least 16 years of age, currently in 11th or 12th grade.",
+        applicationUrl: "https://simr.stanford.edu/",
+        organization: "Stanford University School of Medicine",
+        isRemote: false,
+        country: "United States",
+        region: "California",
+        city: "Stanford",
+        gradeLevel: "11th Grade, 12th Grade",
+        ageRequirement: "16+",
+        isPaid: true,
+        programLength: "8 Weeks"
+      },
+      // 5. Volunteer Opportunities
+      {
+        title: "Red Cross Youth Volunteer Network",
+        description: "Make an impact in your community while building leadership skills. Youth volunteers assist with blood drives, disaster preparation awareness, and local community outreach.",
+        category: "Volunteer Opportunities",
+        deadline: "2026-12-31",
+        location: "Local Chapter",
+        eligibility: "Open to middle and high school students aged 13-18 globally. High integrity and commitment.",
+        applicationUrl: "https://www.redcross.org/volunteer/become-a-volunteer/youth-volunteers.html",
+        organization: "American Red Cross",
+        isRemote: false,
+        country: "Global",
+        region: null,
+        city: null,
+        gradeLevel: "All",
+        ageRequirement: "13+",
+        isPaid: false,
+        programLength: "Ongoing"
+      },
+      {
+        title: "United Nations Online Volunteers",
+        description: "Support UN agencies and global non-governmental organizations by applying your digital skills (translation, coding, design, research) in key sustainable development goals.",
+        category: "Volunteer Opportunities",
+        deadline: "2026-12-31",
+        location: "Remote",
+        eligibility: "Open to motivated individuals globally. Tech-savvy and dependable.",
+        applicationUrl: "https://www.unv.org/become-online-volunteer",
+        organization: "United Nations",
+        isRemote: true,
+        country: "Global",
+        region: null,
+        city: null,
+        gradeLevel: "All",
+        ageRequirement: "18+",
+        isPaid: false,
+        programLength: "Flexible"
+      },
+      // 6. Hackathons
+      {
+        title: "HackMIT",
+        description: "MIT's flagship annual hackathon, bringing together thousands of high school and university students to collaborate on tech solutions, software projects, and hardware hacks.",
+        category: "Hackathons",
+        deadline: "2026-08-15",
+        location: "Cambridge, MA",
+        eligibility: "High school and undergraduate university students. Open to international applicants with travel reimbursement available.",
+        applicationUrl: "https://hackmit.org/",
+        organization: "MIT",
+        isRemote: false,
+        country: "Global",
+        region: "Massachusetts",
+        city: "Cambridge",
+        gradeLevel: "All",
+        ageRequirement: "15+",
+        isPaid: false,
+        programLength: "36 Hours"
+      },
+      {
+        title: "Singapore Youth Tech Challenge Hackathon",
+        description: "A premier youth hackathon focused on solving sustainability issues in urban ecosystems. Partnered with GovTech Singapore and SGInnovate.",
+        category: "Hackathons",
+        deadline: "2026-05-20",
+        location: "Singapore City",
+        eligibility: "Students studying in Singapore schools or international schools in ASEAN region, aged 14 to 19.",
+        applicationUrl: "https://www.smartnation.gov.sg/",
+        organization: "GovTech Singapore",
+        isRemote: false,
+        country: "Singapore",
+        region: null,
+        city: "Singapore",
+        gradeLevel: "9th Grade, 10th Grade, 11th Grade, 12th Grade",
+        ageRequirement: "14-19",
+        isPaid: false,
+        programLength: "3 Days"
+      },
+      // 7. Summer Programs
+      {
+        title: "Yale Young Global Scholars (YYGS)",
+        description: "An academic development program that brings together outstanding high school students from over 150 countries for intensive collaborative study in humanities, sciences, or economics.",
+        category: "Summer Programs",
+        deadline: "2026-01-10",
+        location: "Yale Campus, New Haven, CT",
+        eligibility: "High school sophomores or juniors (grades 10 and 11) from any country, aged at least 15 by program start.",
+        applicationUrl: "https://globalscholars.yale.edu/",
+        organization: "Yale University",
+        isRemote: false,
+        country: "Global",
+        region: "Connecticut",
+        city: "New Haven",
+        gradeLevel: "10th Grade, 11th Grade",
+        ageRequirement: "15+",
+        isPaid: false,
+        programLength: "2 Weeks"
+      },
+      {
+        title: "Oxbridge Summer Academy",
+        description: "Experience university life at Oxford or Cambridge. Intensive academic courses paired with creative workshops, leadership training, and college prep mentoring.",
+        category: "Summer Programs",
+        deadline: "2026-03-31",
+        location: "Oxford, United Kingdom",
+        eligibility: "International high school students aged 15-18 with outstanding academic records.",
+        applicationUrl: "https://www.oxbridgeacademicprograms.com/",
+        organization: "Oxbridge Academic Programs",
+        isRemote: false,
+        country: "United Kingdom",
+        region: "Oxfordshire",
+        city: "Oxford",
+        gradeLevel: "10th Grade, 11th Grade, 12th Grade",
+        ageRequirement: "15-18",
+        isPaid: false,
+        programLength: "4 Weeks"
+      }
+    ];
+
+    await db.insert(opportunities).values(seedData);
+    console.log("Successfully seeded 17 prestigious opportunities!");
+  } catch (error) {
+    console.error("Failed to seed opportunities database:", error);
+  }
+}
+
+async function startServer() {
+  // Run DB seed check
+  await seedOpportunitiesIfEmpty();
+
+  const app = express();
+  const PORT = 3000;
+
+  app.use(express.json());
+
+  // API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
+
+  // Sync user profile from Firebase to Postgres
+  app.post("/api/users/sync", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const user = await getOrCreateUser(req.user.uid, req.user.email || "", req.user.name);
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/users/me", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      res.json(userRecords[0]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/users/me", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const { grade, interests, goals, country } = req.body;
+      const updatedUser = await db.update(users)
+        .set({ grade, interests, goals, country })
+        .where(eq(users.uid, req.user.uid))
+        .returning();
+      res.json(updatedUser[0]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Academic Profile
+  app.get("/api/academic-profile", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      const dbUserId = userRecords[0].id;
+      
+      const profile = await db.select().from(academicProfiles).where(eq(academicProfiles.userId, dbUserId));
+      if (profile.length === 0) return res.json({});
+      res.json(profile[0]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/academic-profile", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      const dbUserId = userRecords[0].id;
+      
+      const existing = await db.select().from(academicProfiles).where(eq(academicProfiles.userId, dbUserId));
+      if (existing.length > 0) {
+        const updated = await db.update(academicProfiles)
+          .set({ ...req.body, updatedAt: new Date() })
+          .where(eq(academicProfiles.userId, dbUserId))
+          .returning();
+        res.json(updated[0]);
+      } else {
+        const inserted = await db.insert(academicProfiles)
+          .values({ ...req.body, userId: dbUserId })
+          .returning();
+        res.json(inserted[0]);
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Applications
+  app.get("/api/applications", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      const dbUserId = userRecords[0].id;
+      
+      const userApps = await db.select().from(applications).where(eq(applications.userId, dbUserId));
+      res.json(userApps);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/applications", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      const dbUserId = userRecords[0].id;
+      
+      const inserted = await db.insert(applications)
+        .values({ ...req.body, userId: dbUserId })
+        .returning();
+      res.json(inserted[0]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Activities
+  app.get("/api/activities", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      const dbUserId = userRecords[0].id;
+      
+      const userActivities = await db.select().from(activities).where(eq(activities.userId, dbUserId));
+      res.json(userActivities);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/activities", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      const dbUserId = userRecords[0].id;
+      
+      const inserted = await db.insert(activities)
+        .values({ ...req.body, userId: dbUserId })
+        .returning();
+      res.json(inserted[0]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Opportunities
+  app.get("/api/opportunities", async (req, res) => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      try {
+        // Automatically remove outdated local/non-remote opportunities whose deadline is in the past
+        await db.delete(opportunities).where(and(lt(opportunities.deadline, today), eq(opportunities.isRemote, false)));
+      } catch (cleanError) {
+        console.error("Cleanup outdated opportunities failed:", cleanError);
+      }
+
+      const allOpportunities = await db.select().from(opportunities).orderBy(desc(opportunities.createdAt));
+      res.json(allOpportunities);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // AI-Powered Opportunity Aggregator / Discovery
+  app.post("/api/opportunities/aggregate", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { country } = req.body;
+      const targetCountry = country || "Global";
+
+      const systemInstruction = `You are a world-class opportunity scout AI for students. 
+Discover 3 REAL, active, prestigious upcoming opportunities (scholarships, internships, competitions, research, volunteering, hackathons, or summer programs) specifically available in or open to students from: ${targetCountry}.
+Return ONLY a valid JSON array of objects representing these opportunities. 
+Ensure the objects match the following JSON schema exactly, with NO wrapping markdown code blocks, NO backticks, and NO trailing commas:
+[
+  {
+    "title": "Short descriptive official title of the opportunity",
+    "description": "High-quality detailed description of the opportunity, its goals, and what the student will do (2-3 sentences)",
+    "category": "Must be exactly one of: Scholarships, Internships, Competitions, Research Programs, Volunteer Opportunities, Hackathons, Summer Programs",
+    "deadline": "YYYY-MM-DD (must be a future date in 2026 or 2027)",
+    "location": "City, State or Virtual/Remote",
+    "eligibility": "Clear eligibility requirements (e.g. high school seniors, age 15-18)",
+    "applicationUrl": "Valid URL to the official website or application page (always starts with http or https)",
+    "organization": "Official organization name hosting this opportunity",
+    "isRemote": true or false,
+    "country": "${targetCountry}",
+    "region": "State, province, region or null",
+    "city": "City name or null",
+    "gradeLevel": "e.g. '10th Grade, 11th Grade' or 'All'",
+    "ageRequirement": "e.g. '15+' or '14-18' or null",
+    "isPaid": true or false,
+    "programLength": "e.g. '6 weeks' or '3 months' or 'Summer'"
+  }
+]`;
+
+      const textResponse = await generateContentManager(
+        systemInstruction,
+        `Discover new student opportunities for: ${targetCountry}`,
+        true
+      );
+
+      let discovered = [];
+      try {
+        discovered = cleanAndParseJson(textResponse);
+      } catch (e) {
+        console.error("Failed to parse JSON for aggregate:", textResponse);
+        return res.status(500).json({ error: "Failed to parse AI response" });
+      }
+
+      if (!Array.isArray(discovered)) {
+        return res.status(500).json({ error: "AI response is not an array" });
+      }
+
+      const insertedOps = [];
+      for (const op of discovered) {
+        if (!op.title || !op.description || !op.category || !op.applicationUrl || !op.organization) {
+          continue;
+        }
+        
+        const opToInsert = {
+          title: op.title,
+          description: op.description,
+          category: op.category,
+          deadline: op.deadline || null,
+          location: op.location || "Remote",
+          eligibility: op.eligibility || "High school students",
+          applicationUrl: op.applicationUrl,
+          organization: op.organization,
+          isRemote: !!op.isRemote,
+          country: op.country || targetCountry,
+          region: op.region || null,
+          city: op.city || null,
+          gradeLevel: op.gradeLevel || "All",
+          ageRequirement: op.ageRequirement || null,
+          isPaid: !!op.isPaid,
+          programLength: op.programLength || null,
+        };
+
+        const inserted = await db.insert(opportunities).values(opToInsert).returning();
+        insertedOps.push(inserted[0]);
+      }
+
+      res.json({ success: true, count: insertedOps.length, opportunities: insertedOps });
+    } catch (error: any) {
+      console.error("Aggregation error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/opportunities/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await db.select().from(opportunities).where(eq(opportunities.id, id));
+      if (result.length === 0) return res.status(404).json({ error: "Not found" });
+      res.json(result[0]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Admin: Create Opportunity
+  // For safety in this demo, requiring auth. In reality, check admin claims.
+  app.post("/api/opportunities", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const newOp = await db.insert(opportunities).values(req.body).returning();
+      res.json(newOp[0]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Coach Chat API using Gemini
+  app.post("/api/coach/chat", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const { message, history } = req.body;
+      
+      if (!message) {
+        return res.status(400).json({ error: "Message is required." });
+      }
+
+      const systemInstruction = `You are the TeenLaunch AI Coach, an always-available strategic mentor for a high school student aiming for top universities and ambitious career goals.
+You are encouraging, analytical, and highly actionable. Provide specific advice on academics, extracurriculars, and leadership.
+Keep your responses concise and readable (using markdown). Focus on helping the student optimize their profile and discover opportunities.`;
+      
+      const responseText = await generateChatContent(systemInstruction, history, message);
+
+      res.json({ text: responseText });
+    } catch (error: any) {
+      console.error("Coach chat error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Bookmarks
+  app.get("/api/bookmarks", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.json([]);
+      const dbUserId = userRecords[0].id;
+
+      const userBookmarks = await db.select({
+        id: bookmarks.id,
+        opportunity: opportunities
+      })
+      .from(bookmarks)
+      .innerJoin(opportunities, eq(bookmarks.opportunityId, opportunities.id))
+      .where(eq(bookmarks.userId, dbUserId));
+
+      res.json(userBookmarks);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/bookmarks/:opportunityId", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const opId = parseInt(req.params.opportunityId);
+
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      const dbUserId = userRecords[0].id;
+
+      const newBookmark = await db.insert(bookmarks).values({
+        userId: dbUserId,
+        opportunityId: opId
+      }).returning();
+      res.json(newBookmark[0]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/bookmarks/:opportunityId", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const opId = parseInt(req.params.opportunityId);
+
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      const dbUserId = userRecords[0].id;
+
+      await db.delete(bookmarks).where(
+        and(eq(bookmarks.userId, dbUserId), eq(bookmarks.opportunityId, opId))
+      );
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Essay Assistant API using Gemini 3.1 Pro Preview with Thinking Mode
+  app.post("/api/essay/analyze", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const { prompt, draft } = req.body;
+      
+      if (!prompt || !draft) {
+        return res.status(400).json({ error: "Prompt and draft are required." });
+      }
+
+      const systemInstruction = `You are an elite college admissions essay advisor.
+You help students craft compelling college admission essays by providing structural feedback and scoring for the given essay draft against the prompt.
+
+Output MUST be a JSON object with this exact structure:
+{
+  "score": <number between 0 and 100>,
+  "feedback": ["<feedback point 1>", "<feedback point 2>"],
+  "strengths": ["<strength 1>", "<strength 2>"],
+  "weaknesses": ["<weakness 1>", "<weakness 2>"],
+  "structureSuggestions": ["<suggestion 1>", "<suggestion 2>"]
+}`;
+
+      const textResponse = await generateContentManager(
+        systemInstruction,
+        `Essay Prompt: ${prompt}\n\nStudent Draft:\n${draft}`,
+        true
+      );
+      
+      let parsed = {};
+      try {
+        parsed = cleanAndParseJson(textResponse);
+      } catch (e) {
+        console.error("Failed to parse JSON from Gemini:", textResponse);
+        return res.status(500).json({ error: "Failed to parse AI response" });
+      }
+
+      res.json(parsed);
+    } catch (error: any) {
+      console.error("Essay analysis error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/essay/brainstorm", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const { prompt } = req.body;
+      
+      if (!prompt) {
+        return res.status(400).json({ error: "Prompt is required." });
+      }
+
+      const systemInstruction = `You are an elite college admissions essay advisor.
+The student needs help brainstorming topic ideas for the given essay prompt.
+
+Output MUST be a JSON array of objects with this exact structure:
+[
+  {
+    "title": "<Short idea title>",
+    "description": "<A paragraph describing the angle and why it works>"
+  },
+  ...
+]
+Provide 3 highly distinct and creative ideas.`;
+
+      const textResponse = await generateContentManager(
+        systemInstruction,
+        `Essay Prompt: ${prompt}\n\nPlease brainstorm ideas.`,
+        true
+      );
+      
+      let parsed = [];
+      try {
+        parsed = cleanAndParseJson(textResponse);
+      } catch (e) {
+        console.error("Failed to parse JSON from Gemini:", textResponse);
+        return res.status(500).json({ error: "Failed to parse AI response" });
+      }
+
+      res.json({ ideas: parsed });
+    } catch (error: any) {
+      console.error("Brainstorm error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Roadmap Generator
+  app.post("/api/roadmap/generate", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { goal, grade, profile } = req.body;
+      if (!goal || !grade) {
+        return res.status(400).json({ error: "Goal and grade are required." });
+      }
+
+      const systemInstruction = `You are an elite college admissions strategist.
+Generate a multi-year strategic roadmap for a high school student.
+Goal: ${goal}
+Current Grade: ${grade}
+Profile Context: ${JSON.stringify(profile || {})}
+
+Return ONLY a valid JSON array of objects representing the years/grades. 
+Example format:
+[
+  {
+    "grade": "Grade 9",
+    "priority": "High",
+    "items": [
+      { "title": "Join Coding Club", "type": "Extracurricular", "done": false, "hasOp": true }
+    ]
+  }
+]
+Types should be one of: Extracurricular, Competition, Academics, Service, Project, Leadership, Research, Testing, Application.`;
+
+      const textResponse = await generateContentManager(
+        systemInstruction,
+        `Generate roadmap for: ${goal} starting from ${grade}`,
+        true
+      );
+      
+      let parsed = [];
+      try {
+        parsed = cleanAndParseJson(textResponse);
+      } catch (e) {
+        console.error("Failed to parse JSON from AI:", textResponse);
+        return res.status(500).json({ error: "Failed to parse AI response" });
+      }
+
+      res.json({ roadmap: parsed });
+    } catch (error: any) {
+      console.error("Roadmap generation error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // College Competitiveness Analyzer
+  app.post("/api/college/analyze", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { college, major, profile, activities } = req.body;
+      if (!college || !profile) {
+        return res.status(400).json({ error: "College and profile are required." });
+      }
+
+      const systemInstruction = `You are an elite college admissions advisor.
+Analyze the student's competitiveness for ${college} (Major: ${major || "Undecided"}).
+Student Profile: ${JSON.stringify(profile)}
+Student Activities: ${JSON.stringify(activities)}
+
+Return ONLY valid JSON with this structure:
+{
+  "chances": 45,
+  "category": "Reach",
+  "missing": ["Need higher SAT", "Need more leadership"],
+  "strengths": ["Strong GPA", "Good AP count"],
+  "analysis": "A short 2-3 sentence summary."
+}`;
+
+      const textResponse = await generateContentManager(
+        systemInstruction,
+        `Analyze college competitiveness for ${college}.`,
+        true
+      );
+      
+      let parsed = {};
+      try {
+        parsed = cleanAndParseJson(textResponse);
+      } catch (e) {
+        console.error("Failed to parse JSON from AI:", textResponse);
+        return res.status(500).json({ error: "Failed to parse AI response" });
+      }
+
+      res.json(parsed);
+    } catch (error: any) {
+      console.error("College analysis error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==========================================
+  // STUDENT SOCIAL NETWORK API
+  // ==========================================
+
+  // Helper to retrieve the DB user from Firebase Auth UID
+  const getDbUser = async (uid: string) => {
+    const records = await db.select().from(users).where(eq(users.uid, uid));
+    if (records.length === 0) return null;
+    return records[0];
+  };
+
+  // 1. Fetch Feed (LinkedIn-like prioritizing connections, grade, interests, etc.)
+  app.get("/api/social/posts", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      // Fetch all posts with their creators
+      const allPosts = await db.select().from(posts);
+      
+      // Fetch creator details for each post
+      const postsWithCreators = await Promise.all(allPosts.map(async (post) => {
+        const creator = await db.select().from(users).where(eq(users.id, post.userId));
+        
+        // Fetch reactions
+        const reactions = await db.select().from(postReactions).where(eq(postReactions.postId, post.id));
+        
+        // Fetch comments count
+        const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+
+        // Check if current user reacted
+        const userReaction = reactions.find(r => r.userId === currentUser.id)?.type || null;
+
+        return {
+          ...post,
+          creator: creator[0] || null,
+          reactions,
+          reactionCounts: {
+            like: reactions.filter(r => r.type === 'like').length,
+            celebrate: reactions.filter(r => r.type === 'celebrate').length,
+            inspire: reactions.filter(r => r.type === 'inspire').length,
+            support: reactions.filter(r => r.type === 'support').length,
+          },
+          userReaction,
+          commentsCount: comments.length,
+        };
+      }));
+
+      // Fetch user's connections to calculate relevance
+      // All accepted connections
+      const userConnections = await db.select().from(connections).where(
+        and(
+          eq(connections.status, 'accepted'),
+          or(eq(connections.senderId, currentUser.id), eq(connections.receiverId, currentUser.id))
+        )
+      );
+      const connectedUserIds = new Set(userConnections.map(c => c.senderId === currentUser.id ? c.receiverId : c.senderId));
+
+      // Fetch user's following list
+      const userFollowing = await db.select().from(connections).where(
+        and(
+          eq(connections.senderId, currentUser.id),
+          eq(connections.type, 'follow')
+        )
+      );
+      const followingUserIds = new Set(userFollowing.map(f => f.receiverId));
+
+      // Professional Feed Algorithm
+      const scoredPosts = postsWithCreators.map(post => {
+        let score = 0;
+        if (!post.creator) return { post, score: -999 };
+
+        const isConnection = connectedUserIds.has(post.userId);
+        const isFollowing = followingUserIds.has(post.userId);
+
+        if (isConnection) score += 100;
+        if (isFollowing) score += 50;
+
+        // Same country (local)
+        if (currentUser.country && post.creator.country && currentUser.country.toLowerCase() === post.creator.country.toLowerCase()) {
+          score += 40;
+        }
+
+        // Same grade
+        if (currentUser.grade && post.creator.grade && currentUser.grade.toLowerCase() === post.creator.grade.toLowerCase()) {
+          score += 30;
+        }
+
+        // Similar interests
+        if (currentUser.interests && post.creator.interests) {
+          const myInterests = currentUser.interests.toLowerCase().split(",").map(i => i.trim());
+          const theirInterests = post.creator.interests.toLowerCase().split(",").map(i => i.trim());
+          const common = myInterests.filter(i => i && theirInterests.includes(i));
+          score += common.length * 15;
+        }
+
+        // Trending achievements (engagement based)
+        const engagement = post.reactions.length + post.commentsCount * 2;
+        score += engagement * 5;
+
+        // Recency decay (subtract points for older posts)
+        const ageInHours = (Date.now() - new Date(post.createdAt || '').getTime()) / (1000 * 60 * 60);
+        score -= ageInHours * 1.5; // lose 1.5 points per hour
+
+        return { post, score };
+      });
+
+      // Sort scored posts
+      scoredPosts.sort((a, b) => b.score - a.score);
+
+      res.json(scoredPosts.map(sp => sp.post));
+    } catch (err: any) {
+      console.error("Error fetching feed:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 2. Create Post
+  app.post("/api/social/posts", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      const { content, imageUrl, achievementBadge, link, tags, category, isFounderUpdate } = req.body;
+      if (!content) return res.status(400).json({ error: "Content is required" });
+
+      const result = await db.insert(posts).values({
+        userId: currentUser.id,
+        content,
+        imageUrl,
+        achievementBadge,
+        link,
+        tags,
+        category: category || "General",
+        isFounderUpdate: isFounderUpdate || false
+      }).returning();
+
+      res.json(result[0]);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 3. React to Post (like, celebrate, inspire, support)
+  app.post("/api/social/posts/:id/react", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      const postId = parseInt(req.params.id);
+      const { type } = req.body; // 'like', 'celebrate', 'inspire', 'support'
+      if (!type) return res.status(400).json({ error: "Reaction type is required" });
+
+      // Check if post exists
+      const postRecord = await db.select().from(posts).where(eq(posts.id, postId));
+      if (postRecord.length === 0) return res.status(404).json({ error: "Post not found" });
+
+      // Check existing reaction by user on this post
+      const existing = await db.select().from(postReactions).where(
+        and(eq(postReactions.postId, postId), eq(postReactions.userId, currentUser.id))
+      );
+
+      if (existing.length > 0) {
+        if (existing[0].type === type) {
+          // Toggle off
+          await db.delete(postReactions).where(eq(postReactions.id, existing[0].id));
+          return res.json({ toggledOff: true });
+        } else {
+          // Update type
+          const updated = await db.update(postReactions).set({ type }).where(eq(postReactions.id, existing[0].id)).returning();
+          return res.json(updated[0]);
+        }
+      }
+
+      // Create new reaction
+      const result = await db.insert(postReactions).values({
+        postId,
+        userId: currentUser.id,
+        type
+      }).returning();
+
+      // Send notification if not react on own post
+      if (postRecord[0].userId !== currentUser.id) {
+        await db.insert(notifications).values({
+          userId: postRecord[0].userId,
+          actorId: currentUser.id,
+          type: type, // 'like', 'celebrate', etc.
+          postId
+        });
+      }
+
+      res.json(result[0]);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 4. Comment on Post
+  app.post("/api/social/posts/:id/comments", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      const postId = parseInt(req.params.id);
+      const { content, parentId } = req.body;
+      if (!content) return res.status(400).json({ error: "Comment content is required" });
+
+      const postRecord = await db.select().from(posts).where(eq(posts.id, postId));
+      if (postRecord.length === 0) return res.status(404).json({ error: "Post not found" });
+
+      const result = await db.insert(postComments).values({
+        postId,
+        userId: currentUser.id,
+        content,
+        parentId: parentId || null
+      }).returning();
+
+      // Trigger notification if commenting on someone else's post
+      if (postRecord[0].userId !== currentUser.id) {
+        await db.insert(notifications).values({
+          userId: postRecord[0].userId,
+          actorId: currentUser.id,
+          type: 'comment',
+          postId,
+          commentId: result[0].id
+        });
+      }
+
+      res.json({
+        ...result[0],
+        user: currentUser
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 5. Get Comments for Post
+  app.get("/api/social/posts/:id/comments", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const postId = parseInt(req.params.id);
+      const commentsList = await db.select().from(postComments).where(eq(postComments.postId, postId)).orderBy(desc(postComments.createdAt));
+
+      const commentsWithUsers = await Promise.all(commentsList.map(async (comment) => {
+        const creator = await db.select().from(users).where(eq(users.id, comment.userId));
+        return {
+          ...comment,
+          user: creator[0] || null
+        };
+      }));
+
+      res.json(commentsWithUsers);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 6. Connect / Follow Action
+  app.post("/api/social/connect", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      const { receiverId, type } = req.body; // type: 'connection' or 'follow'
+      if (!receiverId || !type) return res.status(400).json({ error: "receiverId and type are required" });
+
+      if (currentUser.id === receiverId) return res.status(400).json({ error: "Cannot connect to yourself" });
+
+      // Check if connection already exists
+      const existing = await db.select().from(connections).where(
+        or(
+          and(eq(connections.senderId, currentUser.id), eq(connections.receiverId, receiverId)),
+          and(eq(connections.senderId, receiverId), eq(connections.receiverId, currentUser.id))
+        )
+      );
+
+      if (existing.length > 0) {
+        // If they requested/connected already
+        const match = existing.find(c => c.senderId === currentUser.id && c.receiverId === receiverId && c.type === type);
+        if (match) return res.json(match); // already sent
+        return res.status(400).json({ error: "An active relationship already exists between you and this student." });
+      }
+
+      // Create relation
+      const status = type === 'follow' ? 'accepted' : 'pending';
+      const result = await db.insert(connections).values({
+        senderId: currentUser.id,
+        receiverId,
+        type,
+        status
+      }).returning();
+
+      // Notification
+      await db.insert(notifications).values({
+        userId: receiverId,
+        actorId: currentUser.id,
+        type: type === 'follow' ? 'follow' : 'connection_request'
+      });
+
+      res.json(result[0]);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 7. Accept Connection Request
+  app.post("/api/social/connect/accept", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      const { senderId } = req.body;
+      if (!senderId) return res.status(400).json({ error: "senderId is required" });
+
+      // Find pending connection
+      const pending = await db.select().from(connections).where(
+        and(
+          eq(connections.senderId, senderId),
+          eq(connections.receiverId, currentUser.id),
+          eq(connections.type, 'connection'),
+          eq(connections.status, 'pending')
+        )
+      );
+
+      if (pending.length === 0) {
+        return res.status(404).json({ error: "Pending connection request not found" });
+      }
+
+      // Update to accepted
+      const updated = await db.update(connections).set({
+        status: 'accepted'
+      }).where(eq(connections.id, pending[0].id)).returning();
+
+      // Trigger accept notification
+      await db.insert(notifications).values({
+        userId: senderId,
+        actorId: currentUser.id,
+        type: 'connection_accept'
+      });
+
+      res.json(updated[0]);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 8. Connection Counts & Status Details
+  app.get("/api/social/connections", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      // Connections: mutual connection type where status = 'accepted'
+      const mutual = await db.select().from(connections).where(
+        and(
+          eq(connections.type, 'connection'),
+          eq(connections.status, 'accepted'),
+          or(eq(connections.senderId, currentUser.id), eq(connections.receiverId, currentUser.id))
+        )
+      );
+
+      // Following: user is sender in follows, or user is in mutual connection
+      const followingList = await db.select().from(connections).where(
+        and(
+          eq(connections.senderId, currentUser.id),
+          or(eq(connections.type, 'follow'), eq(connections.status, 'accepted'))
+        )
+      );
+
+      // Followers: user is receiver in follows, or user is in mutual connection
+      const followersList = await db.select().from(connections).where(
+        or(
+          and(eq(connections.receiverId, currentUser.id), eq(connections.type, 'follow')),
+          and(
+            eq(connections.type, 'connection'),
+            eq(connections.status, 'accepted'),
+            or(eq(connections.senderId, currentUser.id), eq(connections.receiverId, currentUser.id))
+          )
+        )
+      );
+
+      // Pending incoming connections
+      const incomingRequests = await db.select().from(connections).where(
+        and(
+          eq(connections.receiverId, currentUser.id),
+          eq(connections.type, 'connection'),
+          eq(connections.status, 'pending')
+        )
+      );
+
+      const incomingWithUsers = await Promise.all(incomingRequests.map(async (r) => {
+        const u = await db.select().from(users).where(eq(users.id, r.senderId));
+        return {
+          ...r,
+          sender: u[0] || null
+        };
+      }));
+
+      res.json({
+        connectionsCount: mutual.length,
+        followingCount: followingList.length,
+        followersCount: followersList.length,
+        incomingRequests: incomingWithUsers,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 9. Fetch Notifications
+  app.get("/api/social/notifications", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      const list = await db.select().from(notifications).where(eq(notifications.userId, currentUser.id)).orderBy(desc(notifications.createdAt));
+
+      const enriched = await Promise.all(list.map(async (n) => {
+        const actor = await db.select().from(users).where(eq(users.id, n.actorId));
+        let postPreview = null;
+        if (n.postId) {
+          const p = await db.select().from(posts).where(eq(posts.id, n.postId));
+          if (p.length > 0) {
+            postPreview = p[0].content.slice(0, 40) + "...";
+          }
+        }
+        return {
+          ...n,
+          actor: actor[0] || null,
+          postPreview
+        };
+      }));
+
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 10. Mark Notifications as Read
+  app.post("/api/social/notifications/read", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, currentUser.id));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 11. Profile Update
+  app.post("/api/social/profile", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const { headline, bio, portfolioUrl, skills, avatarUrl, grade, interests, goals, country } = req.body;
+
+      const updated = await db.update(users).set({
+        headline,
+        bio,
+        portfolioUrl,
+        skills,
+        avatarUrl,
+        grade,
+        interests,
+        goals,
+        country
+      }).where(eq(users.uid, req.user.uid)).returning();
+
+      res.json(updated[0]);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 12. Fetch Any User Profile Detail
+  app.get("/api/social/profile/:userId", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const targetUserId = parseInt(req.params.userId);
+      const userRecord = await db.select().from(users).where(eq(users.id, targetUserId));
+      if (userRecord.length === 0) return res.status(404).json({ error: "Student profile not found" });
+
+      const profileUser = userRecord[0];
+
+      // Fetch academic profile
+      const acad = await db.select().from(academicProfiles).where(eq(academicProfiles.userId, targetUserId));
+      
+      // Fetch activities (leadership, volunteer, research, competitions, awards, projects)
+      const userActivities = await db.select().from(activities).where(eq(activities.userId, targetUserId));
+
+      // Fetch posts by user
+      const userPosts = await db.select().from(posts).where(eq(posts.userId, targetUserId)).orderBy(desc(posts.createdAt));
+
+      // Enrich posts with reactions and comments count
+      const enrichedPosts = await Promise.all(userPosts.map(async (post) => {
+        const reactions = await db.select().from(postReactions).where(eq(postReactions.postId, post.id));
+        const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+        return {
+          ...post,
+          reactions,
+          reactionCounts: {
+            like: reactions.filter(r => r.type === 'like').length,
+            celebrate: reactions.filter(r => r.type === 'celebrate').length,
+            inspire: reactions.filter(r => r.type === 'inspire').length,
+            support: reactions.filter(r => r.type === 'support').length,
+          },
+          commentsCount: comments.length,
+        };
+      }));
+
+      // Connections details
+      const mutual = await db.select().from(connections).where(
+        and(
+          eq(connections.type, 'connection'),
+          eq(connections.status, 'accepted'),
+          or(eq(connections.senderId, targetUserId), eq(connections.receiverId, targetUserId))
+        )
+      );
+
+      const followingList = await db.select().from(connections).where(
+        and(
+          eq(connections.senderId, targetUserId),
+          or(eq(connections.type, 'follow'), eq(connections.status, 'accepted'))
+        )
+      );
+
+      const followersList = await db.select().from(connections).where(
+        or(
+          and(eq(connections.receiverId, targetUserId), eq(connections.type, 'follow')),
+          and(
+            eq(connections.type, 'connection'),
+            eq(connections.status, 'accepted'),
+            or(eq(connections.senderId, targetUserId), eq(connections.receiverId, targetUserId))
+          )
+        )
+      );
+
+      // Check current connection state between logged user and targetUser
+      const loggedInRecord = await getDbUser(req.user?.uid || "");
+      let connectionState: any = null;
+      if (loggedInRecord && loggedInRecord.id !== targetUserId) {
+        const existing = await db.select().from(connections).where(
+          or(
+            and(eq(connections.senderId, loggedInRecord.id), eq(connections.receiverId, targetUserId)),
+            and(eq(connections.senderId, targetUserId), eq(connections.receiverId, loggedInRecord.id))
+          )
+        );
+        if (existing.length > 0) {
+          connectionState = existing[0];
+        }
+      }
+
+      res.json({
+        user: profileUser,
+        academicProfile: acad[0] || null,
+        activities: userActivities,
+        posts: enrichedPosts,
+        connectionsCount: mutual.length,
+        followingCount: followingList.length,
+        followersCount: followersList.length,
+        connectionState,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 13. Dynamic Leaderboard using Real Database Users ONLY (Strict Integrity!)
+  app.get("/api/social/leaderboard", async (req, res) => {
+    try {
+      const allUsers = await db.select().from(users);
+      if (allUsers.length === 0) {
+        return res.json([]);
+      }
+
+      const leaderboardEntries = await Promise.all(allUsers.map(async (u) => {
+        // Compute score based on real user achievements
+        const acad = await db.select().from(academicProfiles).where(eq(academicProfiles.userId, u.id));
+        const userActivities = await db.select().from(activities).where(eq(activities.userId, u.id));
+        const userPosts = await db.select().from(posts).where(eq(posts.userId, u.id));
+
+        // Approved verification badges
+        const badgeCount = (u.verificationBadges || "").split(",").filter(b => b.trim().length > 0).length;
+
+        let score = 0;
+        score += badgeCount * 150; // Each verification badge is huge
+        
+        // Academic profile weight (AP, Honors courses)
+        if (acad.length > 0) {
+          score += (acad[0].apCourses || 0) * 30;
+          score += (acad[0].honorsCourses || 0) * 15;
+          if (acad[0].gpa) {
+            score += Math.round(acad[0].gpa * 50); // e.g. 4.0 GPA adds 200 points
+          }
+        }
+
+        // Activities logged
+        userActivities.forEach(act => {
+          score += 20; // 20 points per activity entry
+          score += (act.hours || 0) * 2; // 2 points per logged hour
+          if (act.type?.toLowerCase() === 'leadership') score += 15;
+          if (act.type?.toLowerCase() === 'research') score += 20;
+          if (act.type?.toLowerCase() === 'award') score += 25;
+        });
+
+        // Posts shared
+        score += userPosts.length * 10;
+
+        return {
+          id: u.id,
+          name: u.name || "Anonymous Student",
+          avatarUrl: u.avatarUrl,
+          headline: u.headline || `${u.grade || "Student"}`,
+          country: u.country,
+          grade: u.grade,
+          verificationBadges: u.verificationBadges,
+          score,
+          activitiesCount: userActivities.length,
+          postsCount: userPosts.length,
+        };
+      }));
+
+      // Sort by score descending and remove any zero-score users if we want, or list them. Let's list all sorted.
+      leaderboardEntries.sort((a, b) => b.score - a.score);
+
+      res.json(leaderboardEntries);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 14. Trending Students (using Real database users)
+  app.get("/api/social/trending", async (req, res) => {
+    try {
+      const allUsers = await db.select().from(users);
+      if (allUsers.length === 0) return res.json({ active: [], volunteers: [], scholarshipWinners: [], competitors: [] });
+
+      const usersWithMetrics = await Promise.all(allUsers.map(async (u) => {
+        const userActivities = await db.select().from(activities).where(eq(activities.userId, u.id));
+        const userPosts = await db.select().from(posts).where(eq(posts.userId, u.id));
+        
+        const volunteerHours = userActivities
+          .filter(a => a.type?.toLowerCase().includes('volunteer'))
+          .reduce((sum, current) => sum + (current.hours || 0), 0);
+
+        const hasScholarshipBadge = (u.verificationBadges || "").toLowerCase().includes("scholarship");
+        const hasCompetitionBadge = (u.verificationBadges || "").toLowerCase().includes("competition");
+
+        return {
+          id: u.id,
+          name: u.name,
+          avatarUrl: u.avatarUrl,
+          headline: u.headline || `${u.grade || "Student"}`,
+          country: u.country,
+          verificationBadges: u.verificationBadges,
+          postsCount: userPosts.length,
+          activitiesCount: userActivities.length,
+          volunteerHours,
+          hasScholarshipBadge,
+          hasCompetitionBadge,
+        };
+      }));
+
+      // Active
+      const active = [...usersWithMetrics]
+        .filter(u => u.postsCount > 0 || u.activitiesCount > 0)
+        .sort((a, b) => b.postsCount - a.postsCount)
+        .slice(0, 5);
+
+      // Volunteers
+      const volunteers = [...usersWithMetrics]
+        .filter(u => u.volunteerHours > 0)
+        .sort((a, b) => b.volunteerHours - a.volunteerHours)
+        .slice(0, 5);
+
+      // Scholarship Winners
+      const scholarshipWinners = [...usersWithMetrics]
+        .filter(u => u.hasScholarshipBadge)
+        .slice(0, 5);
+
+      // Competitors
+      const competitors = [...usersWithMetrics]
+        .filter(u => u.hasCompetitionBadge)
+        .slice(0, 5);
+
+      res.json({
+        active,
+        volunteers,
+        scholarshipWinners,
+        competitors
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 15. Profile Verification Application
+  app.post("/api/social/verify", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      const { badgeType, proof } = req.body;
+      if (!badgeType || !proof) return res.status(400).json({ error: "badgeType and proof description are required" });
+
+      const result = await db.insert(verificationRequests).values({
+        userId: currentUser.id,
+        badgeType,
+        proof,
+        status: 'pending'
+      }).returning();
+
+      res.json(result[0]);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 16. Admin/Moderator approval endpoint
+  app.get("/api/social/verification-requests", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const list = await db.select().from(verificationRequests).orderBy(desc(verificationRequests.createdAt));
+      const enriched = await Promise.all(list.map(async (r) => {
+        const u = await db.select().from(users).where(eq(users.id, r.userId));
+        return {
+          ...r,
+          user: u[0] || null
+        };
+      }));
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/social/verify-approve", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { requestId, status } = req.body; // status = 'approved' or 'rejected'
+      if (!requestId || !status) return res.status(400).json({ error: "requestId and status are required" });
+
+      const reqRecord = await db.select().from(verificationRequests).where(eq(verificationRequests.id, requestId));
+      if (reqRecord.length === 0) return res.status(404).json({ error: "Request not found" });
+
+      // Update request status
+      await db.update(verificationRequests).set({ status }).where(eq(verificationRequests.id, requestId));
+
+      if (status === 'approved') {
+        // Append badge to user
+        const targetUser = await db.select().from(users).where(eq(users.id, reqRecord[0].userId));
+        if (targetUser.length > 0) {
+          const currentBadges = targetUser[0].verificationBadges || "";
+          const badgeList = currentBadges.split(",").map(b => b.trim()).filter(b => b.length > 0);
+          if (!badgeList.includes(reqRecord[0].badgeType)) {
+            badgeList.push(reqRecord[0].badgeType);
+          }
+          await db.update(users).set({
+            verificationBadges: badgeList.join(", ")
+          }).where(eq(users.id, reqRecord[0].userId));
+
+          // Send notification
+          await db.insert(notifications).values({
+            userId: reqRecord[0].userId,
+            actorId: reqRecord[0].userId, // Self/admin trigger
+            type: 'connection_accept', // Reused type for badges update
+          });
+        }
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();
