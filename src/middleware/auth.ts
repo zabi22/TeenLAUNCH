@@ -18,6 +18,24 @@ export const requireAuth = async (
   }
 
   const token = authHeader.split('Bearer ')[1];
+  
+  // Developer/Demo bypass to allow seamless preview testing
+  if (token === 'demo-token') {
+    req.user = {
+      uid: 'demo-user-123',
+      email: 'demo@teenlaunch.com',
+      name: 'Alex Johnson',
+      picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop',
+      email_verified: true,
+      auth_time: Math.floor(Date.now() / 1000),
+      iss: 'https://securetoken.google.com/teenlaunch-prod',
+      aud: 'teenlaunch-prod',
+      sub: 'demo-user-123',
+    } as any as DecodedIdToken;
+    next();
+    return;
+  }
+
   try {
     const decodedToken = await adminAuth.verifyIdToken(token);
     req.user = decodedToken;

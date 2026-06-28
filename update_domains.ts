@@ -43,7 +43,9 @@ async function main() {
   // 2. Add new domains
   const newDomains = [
     "teenlaunch.netlify.app",
-    "6a40fe7de9f4f533dc270200--teenlaunch.netlify.app"
+    "6a40fe7de9f4f533dc270200--teenlaunch.netlify.app",
+    "ais-dev-ery7mso4d7vcvtoiqpefnw-1002835400897.europe-west2.run.app",
+    "ais-pre-ery7mso4d7vcvtoiqpefnw-1002835400897.europe-west2.run.app"
   ];
 
   let changed = false;

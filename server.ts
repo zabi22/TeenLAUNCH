@@ -1,9 +1,15 @@
 import express from "express";
 import path from "path";
+import cors from "cors";
+import dotenv from "dotenv";
+import helmet from "helmet";
+dotenv.config();
+
 import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
 import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
-import { db } from "./src/db/index.ts";
+import { db, pool } from "./src/db/index.ts";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { adminDb, adminAuth } from "./src/lib/firebase-admin.ts";
 import { opportunities, bookmarks, users, academicProfiles, applications, activities, posts, postReactions, postComments, connections, notifications, verificationRequests, messages } from "./src/db/schema.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
@@ -411,15 +417,48 @@ async function seedOpportunitiesIfEmpty() {
 }
 
 async function startServer() {
+  try {
+    console.log("Testing database connection...");
+    await pool.query('SELECT 1');
+    console.log("Database connection test successful.");
+  } catch (error) {
+    console.error("CRITICAL: Database connection failed. Ensure DATABASE_URL is correct and reachable:", error);
+    process.exit(1);
+  }
+
+  try {
+    console.log("Running migrations...");
+    await migrate(db, { migrationsFolder: "./drizzle" });
+    console.log("Migrations complete.");
+  } catch (error) {
+    console.error("Migrations failed:", error);
+  }
   // Run DB seed check
   await seedOpportunitiesIfEmpty();
 
   const app = express();
   const PORT = 3000;
 
+  app.use(cors());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          "connect-src": ["'self'", "blob:", "data:"],
+          "worker-src": ["'self'", "blob:", "data:"],
+        },
+      },
+    })
+  );
   app.use(express.json());
 
   // API Routes
+  app.get("/healthz", (req, res) => {
+    res.json({ status: "ok" });
+  });
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
@@ -1043,6 +1082,7 @@ Provide 3 highly distinct and creative ideas.`;
 
   // Roadmap Generator
   app.post("/api/roadmap/generate", requireAuth, async (req: AuthRequest, res) => {
+    console.log("Roadmap generation request received");
     try {
       const { goal, grade, profile } = req.body;
       if (!goal || !grade) {
@@ -1076,13 +1116,57 @@ Types should be one of: Extracurricular, Competition, Academics, Service, Projec
       
       let parsed = [];
       try {
-        parsed = cleanAndParseJson(textResponse);
+        const rawParsed = cleanAndParseJson(textResponse);
+        if (Array.isArray(rawParsed)) {
+          parsed = rawParsed;
+        } else if (rawParsed && typeof rawParsed === "object") {
+          if (Array.isArray(rawParsed.roadmap)) {
+            parsed = rawParsed.roadmap;
+          } else if (Array.isArray(rawParsed.timeline)) {
+            parsed = rawParsed.timeline;
+          } else if (Array.isArray(rawParsed.items)) {
+            parsed = rawParsed.items;
+          } else {
+            const foundArray = Object.values(rawParsed).find(val => Array.isArray(val));
+            if (foundArray) {
+              parsed = foundArray;
+            } else {
+              parsed = [rawParsed];
+            }
+          }
+        }
       } catch (e) {
         console.error("Failed to parse JSON from AI:", textResponse);
         return res.status(500).json({ error: "Failed to parse AI response" });
       }
 
-      res.json({ roadmap: parsed });
+      // Normalize each stage to guarantee exact structures expected by the frontend
+      const normalizedRoadmap = parsed.map((stage: any) => {
+        if (!stage || typeof stage !== "object") {
+          return {
+            grade: "Upcoming Step",
+            priority: "Medium",
+            items: []
+          };
+        }
+        return {
+          grade: stage.grade || "Upcoming Step",
+          priority: stage.priority || "Medium",
+          items: Array.isArray(stage.items) ? stage.items.map((item: any) => {
+            if (typeof item === "string") {
+              return { title: item, type: "Academics", done: false, hasOp: false };
+            }
+            return {
+              title: item?.title || "Strategic Milestone",
+              type: item?.type || "Academics",
+              done: !!item?.done,
+              hasOp: !!item?.hasOp
+            };
+          }) : []
+        };
+      });
+
+      res.json({ roadmap: normalizedRoadmap });
     } catch (error: any) {
       console.error("Roadmap generation error:", error);
       res.status(500).json({ error: error.message });
@@ -2095,6 +2179,15 @@ Return ONLY valid JSON with this structure:
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // Global Error-Handling Middleware
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("SERVER CRASH LOG:", err.stack || err);
+    res.status(err.status || 500).json({
+      error: true,
+      message: err.message || "An unexpected error occurred on the server.",
+    });
   });
 
   // Vite middleware for development

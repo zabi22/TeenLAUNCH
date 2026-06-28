@@ -13,12 +13,24 @@ export default function Roadmap() {
 
   // Elite Roadmap generation simulation
   const [roadmap, setRoadmap] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
+    if (isGenerating) return; // Prevent multiple clicks
+
     setIsGenerating(true);
+    setError(null);
+    setShowRoadmap(false); // Reset view
+
     try {
       const token = await user?.getIdToken();
+      if (!token) {
+        throw new Error("You must be logged in to generate a roadmap.");
+      }
       
+      // Use setTimeout to allow the UI to update to "generating" state before heavy work
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Fetch profile context first to pass to AI
       let profile = {};
       try {
@@ -26,7 +38,9 @@ export default function Roadmap() {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (pRes.ok) profile = await pRes.json();
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Could not fetch academic profile, proceeding with empty profile");
+      }
 
       const res = await fetch("/api/roadmap/generate", {
         method: "POST",
@@ -39,19 +53,46 @@ export default function Roadmap() {
 
       if (res.ok) {
         const data = await res.json();
-        setRoadmap(data.roadmap || []);
-        setShowRoadmap(true);
+        if (data && Array.isArray(data.roadmap)) {
+          setRoadmap(data.roadmap);
+          setShowRoadmap(true);
+        } else {
+          setError("The AI generated an invalid roadmap structure. Please try again.");
+          console.error("Invalid roadmap payload:", data);
+        }
       } else {
-        console.error("Failed to generate roadmap");
+        const errData = await res.json().catch(() => ({}));
+        let errorMessage = "Failed to generate roadmap.";
+        if (res.status === 401 || res.status === 403) {
+          errorMessage = "Authentication failed. Please log in again.";
+        } else if (res.status >= 500) {
+          errorMessage = "Server unreachable or internal error. Please try again later.";
+        } else if (errData.message || errData.error) {
+          errorMessage = errData.message || errData.error;
+        }
+        setError(errorMessage);
+        console.error("Failed to generate roadmap:", res.status, errData);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      let errorMessage = "A network error occurred. Please check your connection.";
+      if (err.message === "Failed to fetch") {
+        errorMessage = "API connection error: The server is unreachable.";
+      }
+      setError(errorMessage);
+      console.error("Roadmap generation exception:", err);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto p-12 text-center flex flex-col items-center justify-center min-h-[50vh] gap-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+        <p className="text-slate-500 font-medium">Initializing TeenLaunch Advisor...</p>
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/" />;
 
   return (
@@ -108,7 +149,23 @@ export default function Roadmap() {
         </button>
       </div>
 
-      {showRoadmap && (
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 rounded-3xl p-6 flex items-start gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <AlertCircle className="h-6 w-6 text-rose-600 shrink-0 mt-0.5" />
+          <div className="space-y-1 flex-1">
+            <h4 className="font-bold text-rose-900 text-base">Generation Interrupted</h4>
+            <p className="text-sm text-rose-700 leading-relaxed font-medium">{error}</p>
+            <button
+              onClick={handleGenerate}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-rose-800 hover:text-rose-950 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Zap className="h-3.5 w-3.5" /> Retry Generation
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showRoadmap && !error && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           
           <div className="lg:col-span-8 space-y-6">

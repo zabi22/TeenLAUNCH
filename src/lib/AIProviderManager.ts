@@ -134,51 +134,27 @@ export class AIProviderManagerService {
   private async executeGemini(options: AIGenerateOptions): Promise<string> {
     const aiClient = this.getGeminiAi();
     
-    const config: any = {
-      systemInstruction: options.systemInstruction,
-    };
+    const modelsToTry = options.isComplex 
+      ? ["gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
+      : ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"];
 
-    if (options.isJson) {
-      config.responseMimeType = "application/json";
-    }
+    let lastError: any = null;
 
-    if (options.isComplex) {
-      config.thinkingConfig = { thinkingLevel: ThinkingLevel.HIGH };
-    }
-    
-    const modelName = options.isComplex ? "gemini-3.1-pro-preview" : "gemini-3.5-flash";
-
-    try {
-      if (options.history && options.history.length > 0) {
-        const formattedHistory = options.history.map((msg) => ({
-          role: msg.role === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.text }]
-        }));
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`[AI Provider] Attempting Gemini with model: ${modelName}`);
         
-        const chat = aiClient.chats.create({
-          model: modelName,
-          history: formattedHistory,
-          config
-        });
-        const response = await chat.sendMessage({ message: options.prompt });
-        return response.text;
-      } else {
-        const response = await aiClient.models.generateContent({
-          model: modelName,
-          contents: options.prompt,
-          config
-        });
-        return response.text.trim();
-      }
-    } catch (err: any) {
-      if (modelName === "gemini-3.1-pro-preview") {
-        console.warn(`[AI Provider] gemini-3.1-pro-preview failed, falling back to gemini-3.5-flash. Error: ${err?.message || err}`);
-        
-        const fallbackConfig: any = {
+        const config: any = {
           systemInstruction: options.systemInstruction,
         };
+
         if (options.isJson) {
-          fallbackConfig.responseMimeType = "application/json";
+          config.responseMimeType = "application/json";
+        }
+
+        // Only include thinkingConfig on 3.1-pro-preview
+        if (options.isComplex && modelName === "gemini-3.1-pro-preview") {
+          config.thinkingConfig = { thinkingLevel: ThinkingLevel.HIGH };
         }
 
         if (options.history && options.history.length > 0) {
@@ -188,23 +164,27 @@ export class AIProviderManagerService {
           }));
           
           const chat = aiClient.chats.create({
-            model: "gemini-3.5-flash",
+            model: modelName,
             history: formattedHistory,
-            config: fallbackConfig
+            config
           });
           const response = await chat.sendMessage({ message: options.prompt });
           return response.text;
         } else {
           const response = await aiClient.models.generateContent({
-            model: "gemini-3.5-flash",
+            model: modelName,
             contents: options.prompt,
-            config: fallbackConfig
+            config
           });
           return response.text.trim();
         }
+      } catch (err: any) {
+        console.warn(`[AI Provider] Gemini model ${modelName} failed: ${err?.message || err}`);
+        lastError = err;
       }
-      throw err;
     }
+
+    throw lastError || new Error("All Gemini models in the chain failed.");
   }
 
   private async executeGroq(options: AIGenerateOptions): Promise<string> {

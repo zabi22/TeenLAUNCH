@@ -2,19 +2,16 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from './schema.ts';
 
-const { Pool } = pg;
+const databaseUrl = process.env.DATABASE_URL || process.env.INTERNAL_DATABASE_URL;
 
-export const createPool = () => {
-  return new Pool({
-    host: process.env.SQL_HOST,
-    user: process.env.SQL_USER,
-    password: process.env.SQL_PASSWORD,
-    database: process.env.SQL_DB_NAME,
-    connectionTimeoutMillis: 15000,
-  });
-};
+if (!databaseUrl) {
+  throw new Error("CRITICAL: DATABASE_URL environment variable is missing!");
+}
 
-const pool = createPool();
+export const pool = new pg.Pool({
+  connectionString: databaseUrl,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle SQL pool client:', err);
