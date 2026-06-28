@@ -1,16 +1,36 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../components/AuthContext.tsx";
 import { motion } from "motion/react";
 import { Activity, TrendingUp, Award, DollarSign, Briefcase, GraduationCap, Zap, ArrowUpRight } from "lucide-react";
 
 export default function ImpactAnalytics() {
   const { user } = useAuth();
+  const [analytics, setAnalytics] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchAnalytics() {
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/analytics/impact", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAnalytics(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchAnalytics();
+  }, [user]);
 
   const stats = [
-    { label: "Scholarships Won", value: "$42,500", icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-100", trend: "+15%" },
-    { label: "College Admissions", value: "3", icon: GraduationCap, color: "text-indigo-600", bg: "bg-indigo-100", trend: "+1" },
-    { label: "Internships Secured", value: "2", icon: Briefcase, color: "text-amber-600", bg: "bg-amber-100", trend: "New" },
-    { label: "Leadership Growth", value: "+85%", icon: TrendingUp, color: "text-rose-600", bg: "bg-rose-100", trend: "Top 5%" },
+    { label: "Scholarships Won", value: analytics ? analytics.user.scholarships.toString() : "--", icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-100", trend: "+0%" },
+    { label: "College Admissions", value: analytics ? analytics.user.admissions.toString() : "--", icon: GraduationCap, color: "text-indigo-600", bg: "bg-indigo-100", trend: "+0" },
+    { label: "Internships Secured", value: analytics ? analytics.user.internships.toString() : "--", icon: Briefcase, color: "text-amber-600", bg: "bg-amber-100", trend: "0" },
+    { label: "Leadership Growth", value: "+0%", icon: TrendingUp, color: "text-rose-600", bg: "bg-rose-100", trend: "Top %" },
   ];
 
   return (
@@ -30,13 +50,13 @@ export default function ImpactAnalytics() {
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <span className="text-indigo-200 font-bold uppercase tracking-wider text-xs mb-2 block">Global Network Impact</span>
-            <h2 className="text-3xl md:text-4xl font-black">TeenLaunch students have earned <span className="text-emerald-400">$12.5 Million</span> in scholarships.</h2>
+            <h2 className="text-3xl md:text-4xl font-black">TeenLaunch students have earned <span className="text-emerald-400">real opportunities</span>.</h2>
             <p className="text-indigo-100 mt-3 text-lg">Join the world's most powerful student success operating system.</p>
           </div>
           <div className="shrink-0 flex gap-4">
             <div className="text-center p-4 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
-              <div className="text-2xl font-black text-white">45,000+</div>
-              <div className="text-xs text-indigo-200 font-medium mt-1">Opportunities Won</div>
+              <div className="text-2xl font-black text-white">{analytics ? analytics.global.totalOpportunitiesWon : '--'}</div>
+              <div className="text-xs text-indigo-200 font-medium mt-1">Opportunities Won Globally</div>
             </div>
           </div>
         </div>

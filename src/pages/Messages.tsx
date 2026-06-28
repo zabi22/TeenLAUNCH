@@ -1,19 +1,81 @@
-import React, { useState } from "react";
-import { MessageSquare, Search, Send, Image, Paperclip, MoreVertical, Hash, Users, Globe, Phone, Video } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { MessageSquare, Search, Send, Image, Paperclip, MoreVertical, Phone, Video } from "lucide-react";
 import { useAuth } from "../components/AuthContext.tsx";
-import { motion } from "motion/react";
 
 export default function Messages() {
   const { user } = useAuth();
-  const [activeChat, setActiveChat] = useState<number | null>(1);
+  const [activeChat, setActiveChat] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const [chats, setChats] = useState<any[]>([]);
+  const [currentMessages, setCurrentMessages] = useState<any[]>([]);
 
-  const chats = [
-    { id: 1, name: "Sarah Jenkins", role: "MIT Research Partner", lastMessage: "Are we still meeting at 5 PM for the AI lab review?", time: "2m ago", online: true, unread: 2 },
-    { id: 2, name: "Global Scholarship Seekers", role: "Community Group", lastMessage: "Alex: I just submitted the Coca-Cola app!", time: "1h ago", online: false, unread: 15 },
-    { id: 3, name: "Hackathon Team Alpha", role: "Project Group", lastMessage: "The GitHub repo is live.", time: "3h ago", online: true, unread: 0 },
-    { id: 4, name: "Dr. Chen", role: "Mentor", lastMessage: "Your research proposal looks solid.", time: "Yesterday", online: false, unread: 0 }
-  ];
+  useEffect(() => {
+    async function fetchChats() {
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/messages/conversations", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setChats(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchChats();
+  }, [user]);
+
+  useEffect(() => {
+    async function fetchMessages() {
+      if (!user || !activeChat) return;
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch(`/api/messages/${activeChat}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentMessages(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000); // Polling for now
+    return () => clearInterval(interval);
+  }, [user, activeChat]);
+
+  const handleSendMessage = async () => {
+    if (!message.trim() || !activeChat || !user) return;
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/messages/${activeChat}`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ content: message })
+      });
+      if (res.ok) {
+        const newMsg = await res.json();
+        setCurrentMessages(prev => [...prev, newMsg]);
+        setMessage("");
+        
+        // Update last message in sidebar
+        setChats(prev => prev.map(c => 
+          c.id === activeChat ? { ...c, lastMessage: newMsg.content, time: newMsg.createdAt } : c
+        ));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div className="space-y-6 h-[calc(100vh-8rem)] flex flex-col">
@@ -52,7 +114,7 @@ export default function Messages() {
               >
                 <div className="relative">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shrink-0">
-                    {chat.name.charAt(0)}
+                    {chat.name.charAt(0).toUpperCase()}
                   </div>
                   {chat.online && (
                     <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></div>
@@ -63,7 +125,9 @@ export default function Messages() {
                     <h3 className={`text-sm font-bold truncate ${activeChat === chat.id ? 'text-indigo-900' : 'text-slate-900'}`}>
                       {chat.name}
                     </h3>
-                    <span className="text-[10px] font-bold text-slate-400 shrink-0">{chat.time}</span>
+                    <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                      {chat.time ? new Date(chat.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
                   </div>
                   <p className="text-xs font-medium text-slate-500 truncate">{chat.role}</p>
                   <p className={`text-xs mt-1 truncate ${chat.unread > 0 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
@@ -77,6 +141,11 @@ export default function Messages() {
                 )}
               </button>
             ))}
+            {chats.length === 0 && (
+              <div className="text-center p-4 text-slate-500 text-sm">
+                No active conversations yet. Find someone in the Network tab to chat with!
+              </div>
+            )}
           </div>
         </div>
 
@@ -86,7 +155,7 @@ export default function Messages() {
             <div className="h-16 border-b border-slate-100 flex items-center justify-between px-6 bg-white/80 backdrop-blur z-10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold">
-                  {chats.find(c => c.id === activeChat)?.name.charAt(0)}
+                  {chats.find(c => c.id === activeChat)?.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <h2 className="font-bold text-slate-900">{chats.find(c => c.id === activeChat)?.name}</h2>
@@ -103,41 +172,22 @@ export default function Messages() {
             </div>
 
             <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-slate-50/30">
-              <div className="flex justify-center">
-                <span className="bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
-                  Today
-                </span>
-              </div>
-              
-              <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 shrink-0 flex items-center justify-center text-white text-xs font-bold mt-auto">
-                  S
-                </div>
-                <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-bl-none shadow-sm max-w-[70%]">
-                  <p className="text-sm text-slate-700">Hey! Did you check out the new AI Discovery engine for opportunities? It found like 3 local CS internships for me.</p>
-                  <span className="text-[10px] text-slate-400 font-medium block mt-1">4:32 PM</span>
-                </div>
-              </div>
-
-              <div className="flex gap-4 flex-row-reverse">
-                <div className="w-8 h-8 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-slate-500 text-xs font-bold mt-auto">
-                  Me
-                </div>
-                <div className="bg-indigo-600 text-white p-3 rounded-2xl rounded-br-none shadow-sm max-w-[70%]">
-                  <p className="text-sm text-indigo-50">Yeah! It's incredible. The Digital Twin also built a roadmap for me.</p>
-                  <span className="text-[10px] text-indigo-300 font-medium block mt-1 text-right">4:35 PM</span>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 shrink-0 flex items-center justify-center text-white text-xs font-bold mt-auto">
-                  S
-                </div>
-                <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-bl-none shadow-sm max-w-[70%]">
-                  <p className="text-sm text-slate-700">{chats.find(c => c.id === activeChat)?.lastMessage}</p>
-                  <span className="text-[10px] text-slate-400 font-medium block mt-1">5:02 PM</span>
-                </div>
-              </div>
+              {currentMessages.map((msg, idx) => {
+                const isMe = msg.senderId !== activeChat;
+                return (
+                  <div key={idx} className={`flex gap-4 ${isMe ? 'flex-row-reverse' : ''}`}>
+                    <div className={`w-8 h-8 rounded-full ${isMe ? 'bg-slate-200 text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-500 text-white'} shrink-0 flex items-center justify-center text-xs font-bold mt-auto`}>
+                      {isMe ? 'Me' : chats.find(c => c.id === activeChat)?.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className={`${isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border border-slate-200 rounded-bl-none'} p-3 rounded-2xl shadow-sm max-w-[70%]`}>
+                      <p className={`text-sm ${isMe ? 'text-indigo-50' : 'text-slate-700'}`}>{msg.content}</p>
+                      <span className={`text-[10px] ${isMe ? 'text-indigo-300 text-right' : 'text-slate-400'} font-medium block mt-1`}>
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="p-4 border-t border-slate-100 bg-white">
@@ -148,10 +198,14 @@ export default function Messages() {
                   type="text" 
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Type a message..." 
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
-                <button className="bg-indigo-600 text-white p-2.5 rounded-xl hover:bg-indigo-700 transition-colors">
+                <button 
+                  onClick={handleSendMessage}
+                  className="bg-indigo-600 text-white p-2.5 rounded-xl hover:bg-indigo-700 transition-colors"
+                >
                   <Send className="h-5 w-5" />
                 </button>
               </div>

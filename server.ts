@@ -1,10 +1,11 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import crypto from "crypto";
 import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
 import { db } from "./src/db/index.ts";
 import { adminDb, adminAuth } from "./src/lib/firebase-admin.ts";
-import { opportunities, bookmarks, users, academicProfiles, applications, activities, posts, postReactions, postComments, connections, notifications, verificationRequests } from "./src/db/schema.ts";
+import { opportunities, bookmarks, users, academicProfiles, applications, activities, posts, postReactions, postComments, connections, notifications, verificationRequests, messages } from "./src/db/schema.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
 import { eq, desc, and, lt, or, sql } from "drizzle-orm";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
@@ -732,11 +733,19 @@ async function startServer() {
   // AI-Powered Opportunity Aggregator / Discovery
   app.post("/api/opportunities/aggregate", requireAuth, async (req: AuthRequest, res) => {
     try {
-      const { country } = req.body;
+      const { country, region, city, type } = req.body;
       const targetCountry = country || "Global";
+      const targetRegion = region ? `, Region: ${region}` : "";
+      const targetCity = city ? `, City: ${city}` : "";
+      
+      let scoutType = "mix of global prestigious and local/niche";
+      if (type === "local") scoutType = "highly localized, low-competition";
+      if (type === "global") scoutType = "prestigious, high-competition, international";
 
       const systemInstruction = `You are a world-class opportunity scout AI for students. 
-Discover 3 REAL, active, prestigious upcoming opportunities (scholarships, internships, competitions, research, volunteering, hackathons, or summer programs) specifically available in or open to students from: ${targetCountry}.
+Discover 3 REAL, active, prestigious upcoming opportunities (scholarships, internships, competitions, research, volunteering, hackathons, or summer programs).
+Your scouting focus should be a ${scoutType} for a student in: ${targetCountry}${targetRegion}${targetCity}.
+If focusing on local, find opportunities in or near the specified city/region. If global, find remote or prestigious international ones.
 Return ONLY a valid JSON array of objects representing these opportunities. 
 Ensure the objects match the following JSON schema exactly, with NO wrapping markdown code blocks, NO backticks, and NO trailing commas:
 [
@@ -791,6 +800,16 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
           continue;
         }
         
+        // Generate a deduplication hash based on title and organization
+        const hashInput = `${op.title.toLowerCase().trim()}|${op.organization.toLowerCase().trim()}`;
+        const dedupeHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+
+        // Check if it already exists
+        const existing = await db.select().from(opportunities).where(eq(opportunities.dedupeHash, dedupeHash));
+        if (existing.length > 0) {
+          continue; // Skip duplicate
+        }
+
         const opToInsert = {
           title: op.title,
           description: op.description,
@@ -808,6 +827,7 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
           ageRequirement: op.ageRequirement || null,
           isPaid: !!op.isPaid,
           programLength: op.programLength || null,
+          dedupeHash,
           competitionLevel: op.competitionLevel || "Medium",
           acceptanceRate: typeof op.acceptanceRate === 'number' ? op.acceptanceRate : null,
           trustScore: typeof op.trustScore === 'number' ? op.trustScore : 85,
@@ -1462,6 +1482,121 @@ Return ONLY valid JSON with this structure:
       });
 
       res.json(updated[0]);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Analytics Endpoints
+  app.get("/api/analytics/impact", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      // Fetch user's applications
+      const userApps = await db.select().from(applications).where(eq(applications.userId, currentUser.id));
+      
+      const scholarships = userApps.filter(app => app.type === 'scholarship' && app.status === 'accepted').length;
+      const internships = userApps.filter(app => app.type === 'internship' && app.status === 'accepted').length;
+      const admissions = userApps.filter(app => app.type === 'college' && app.status === 'accepted').length;
+      
+      // Calculate total platform stats
+      const allApps = await db.select().from(applications).where(eq(applications.status, 'accepted'));
+      
+      res.json({
+        user: { scholarships, internships, admissions },
+        global: { totalOpportunitiesWon: allApps.length }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Messaging Endpoints
+  app.get("/api/messages/conversations", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+      // Get all unique users we've chatted with
+      const sent = await db.select({ partnerId: messages.receiverId }).from(messages).where(eq(messages.senderId, currentUser.id));
+      const received = await db.select({ partnerId: messages.senderId }).from(messages).where(eq(messages.receiverId, currentUser.id));
+      
+      const partnerIds = [...new Set([...sent.map(s => s.partnerId), ...received.map(r => r.partnerId)])];
+      
+      if (partnerIds.length === 0) return res.json([]);
+      
+      const partners = await db.select().from(users).where(sql`${users.id} IN (${sql.join(partnerIds, sql`, `)})`);
+      
+      // Get last message for each partner
+      const conversations = await Promise.all(partners.map(async (partner) => {
+        const lastMsg = await db.select()
+          .from(messages)
+          .where(or(
+            and(eq(messages.senderId, currentUser.id), eq(messages.receiverId, partner.id)),
+            and(eq(messages.senderId, partner.id), eq(messages.receiverId, currentUser.id))
+          ))
+          .orderBy(desc(messages.createdAt))
+          .limit(1);
+          
+        return {
+          id: partner.id,
+          name: partner.name,
+          role: partner.grade ? `${partner.grade} Student` : 'User',
+          lastMessage: lastMsg[0]?.content || '',
+          time: lastMsg[0]?.createdAt,
+          online: false,
+          unread: 0
+        };
+      }));
+
+      res.json(conversations.sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime()));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/messages/:userId", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      
+      const otherUserId = parseInt(req.params.userId);
+
+      const conversation = await db.select()
+        .from(messages)
+        .where(or(
+          and(eq(messages.senderId, currentUser.id), eq(messages.receiverId, otherUserId)),
+          and(eq(messages.senderId, otherUserId), eq(messages.receiverId, currentUser.id))
+        ))
+        .orderBy(messages.createdAt);
+
+      res.json(conversation);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/messages/:userId", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      const currentUser = await getDbUser(req.user.uid);
+      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      
+      const receiverId = parseInt(req.params.userId);
+      const { content } = req.body;
+      if (!content) return res.status(400).json({ error: "Message content is required" });
+
+      const newMsg = await db.insert(messages).values({
+        senderId: currentUser.id,
+        receiverId,
+        content
+      }).returning();
+
+      res.json(newMsg[0]);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

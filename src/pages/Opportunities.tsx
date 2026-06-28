@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search, MapPin, Calendar, ExternalLink, Bookmark, Filter, Globe, Sparkles, GraduationCap, DollarSign, Clock } from "lucide-react";
+import { Search, MapPin, Calendar, ExternalLink, Bookmark, Filter, Globe, Sparkles, GraduationCap, DollarSign, Clock, Globe2, Loader2 } from "lucide-react";
 import { useAuth } from "../components/AuthContext.tsx";
 import { cn } from "../lib/utils.ts";
 import { EmptyState } from "../components/EmptyState";
@@ -117,7 +117,7 @@ export default function Opportunities() {
   };
 
   // AI Scout continuous opportunity discovery
-  const discoverOpportunitiesWithAI = async () => {
+  const discoverOpportunitiesWithAI = async (type: string = "mixed") => {
     setIsDiscovering(true);
     try {
       const token = await user?.getIdToken();
@@ -128,7 +128,10 @@ export default function Opportunities() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ country: scoutCountry })
+        body: JSON.stringify({ 
+          country: scoutCountry,
+          type
+        })
       });
       if (res.ok) {
         const data = await res.json();
@@ -473,7 +476,7 @@ export default function Opportunities() {
           </div>
 
           {/* AI Scout Panel */}
-          <div className="p-5 bg-gradient-to-br from-indigo-900 to-purple-950 text-white rounded-2xl border border-indigo-800 shadow-lg relative overflow-hidden">
+          <div className="p-5 bg-gradient-to-br from-indigo-900 to-purple-950 text-white rounded-2xl border border-indigo-800 shadow-lg relative overflow-hidden space-y-3">
             <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
             <div className="flex items-center gap-1.5 text-xs font-extrabold text-indigo-300 uppercase tracking-wider mb-1.5">
               <Sparkles className="h-4 w-4 animate-pulse" /> AI Scout Discoverer
@@ -482,11 +485,18 @@ export default function Opportunities() {
               Scout the web with real-time AI to aggregate new prestigious opportunities for <span className="font-bold underline">{countryFilter !== "All" ? countryFilter : (appUser?.country || "Global")}</span>.
             </p>
             <button 
-              onClick={discoverOpportunitiesWithAI}
+              onClick={() => discoverOpportunitiesWithAI("local")}
               disabled={isDiscovering}
-              className={cn("w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-800 disabled:text-indigo-400 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer", isDiscovering && "animate-pulse")}
+              className={cn("w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:text-indigo-400 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer", isDiscovering && "opacity-50")}
             >
-              {isDiscovering ? "Discovering with AI..." : `Aggregate for ${countryFilter !== "All" ? countryFilter : "Local/Global"}`}
+              {isDiscovering ? "Discovering..." : `Find Local Gems`}
+            </button>
+            <button 
+              onClick={() => discoverOpportunitiesWithAI("global")}
+              disabled={isDiscovering}
+              className={cn("w-full py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-800 disabled:text-purple-400 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer", isDiscovering && "opacity-50")}
+            >
+              {isDiscovering ? "Discovering..." : `Find Global Prestige`}
             </button>
           </div>
         </aside>
@@ -610,13 +620,22 @@ export default function Opportunities() {
               title="No opportunities found"
               description="Try adjusting your global search filters or select another country."
               action={
-                <button 
-                  onClick={discoverOpportunitiesWithAI}
-                  disabled={isDiscovering}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 mx-auto cursor-pointer"
-                >
-                  <Sparkles className="h-4 w-4" /> {isDiscovering ? "Running AI Scout..." : "Run AI Scout to find some!"}
-                </button>
+                <div className="flex gap-2 justify-center">
+                  <button 
+                    onClick={() => discoverOpportunitiesWithAI("local")}
+                    disabled={isDiscovering}
+                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Sparkles className="h-4 w-4" /> {isDiscovering ? "Running..." : "Find Local Gems"}
+                  </button>
+                  <button 
+                    onClick={() => discoverOpportunitiesWithAI("global")}
+                    disabled={isDiscovering}
+                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Globe2 className="h-4 w-4" /> {isDiscovering ? "Running..." : "Find Global Prestige"}
+                  </button>
+                </div>
               }
             />
           )}

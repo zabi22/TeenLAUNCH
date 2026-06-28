@@ -48,6 +48,8 @@ export const activities = pgTable('activities', {
 export const applications = pgTable('applications', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
+  type: text('type').default('college'), // 'college', 'scholarship', 'internship', etc.
+  opportunityId: integer('opportunity_id').references(() => opportunities.id),
   collegeName: text('college_name').notNull(),
   status: text('status').default('Not Started'), // 'Not Started', 'In Progress', 'Submitted', 'Accepted'
   deadline: text('deadline'),
@@ -81,6 +83,7 @@ export const opportunities = pgTable('opportunities', {
   ageRequirement: text('age_requirement'),
   isPaid: boolean('is_paid').default(false),
   programLength: text('program_length'),
+  dedupeHash: text('dedupe_hash').unique(), // For duplication engine
   
   // Opportunity Discovery Engine Fields
   competitionLevel: text('competition_level').default('Medium'), // 'Low', 'Medium', 'High'
@@ -183,3 +186,17 @@ export const verificationRequests = pgTable('verification_requests', {
   status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+export const messages = pgTable('messages', {
+  id: serial('id').primaryKey(),
+  senderId: integer('sender_id').references(() => users.id).notNull(),
+  receiverId: integer('receiver_id').references(() => users.id).notNull(),
+  content: text('content').notNull(),
+  read: boolean('read').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  sender: one(users, { fields: [messages.senderId], references: [users.id] }),
+  receiver: one(users, { fields: [messages.receiverId], references: [users.id] }),
+}));

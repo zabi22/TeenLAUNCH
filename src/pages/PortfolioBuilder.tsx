@@ -1,10 +1,30 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FolderOpen, ShieldCheck, Globe, Share2, Upload, FileText, Award, BadgeCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { useAuth } from "../components/AuthContext.tsx";
 
 export default function PortfolioBuilder() {
   const { user } = useAuth();
+  const [studentData, setStudentData] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchStudent() {
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/users/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setStudentData(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchStudent();
+  }, [user]);
   
   return (
     <div className="space-y-8">
@@ -35,13 +55,13 @@ export default function PortfolioBuilder() {
                 <div className="h-24 bg-gradient-to-r from-indigo-500 to-purple-600 relative">
                   <div className="absolute -bottom-10 left-6 w-20 h-20 bg-white rounded-xl shadow-md p-1">
                     <div className="w-full h-full bg-slate-200 rounded-lg flex items-center justify-center text-2xl font-bold text-slate-400">
-                      S
+                      {(studentData?.name || studentData?.email || "S").charAt(0).toUpperCase()}
                     </div>
                   </div>
                 </div>
                 <div className="pt-14 px-6 pb-6">
-                  <h3 className="text-xl font-bold text-slate-900">Student Name</h3>
-                  <p className="text-sm text-slate-500 font-medium mt-1">Aspiring Computer Scientist | Class of 2028</p>
+                  <h3 className="text-xl font-bold text-slate-900">{studentData?.name || studentData?.email || "Student Name"}</h3>
+                  <p className="text-sm text-slate-500 font-medium mt-1">Aspiring {studentData?.goals?.split(',')[0] || "Student"} | {studentData?.grade || ""}</p>
                   
                   <div className="mt-6">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Verified Achievements</h4>
@@ -49,15 +69,8 @@ export default function PortfolioBuilder() {
                       <div className="flex items-center gap-3 p-3 rounded-xl border border-emerald-100 bg-emerald-50/50">
                         <BadgeCheck className="h-5 w-5 text-emerald-500 shrink-0" />
                         <div>
-                          <p className="text-sm font-bold text-slate-900">USACO Silver Division</p>
-                          <p className="text-xs text-slate-500">Verified via Official Certificate</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-xl border border-emerald-100 bg-emerald-50/50">
-                        <BadgeCheck className="h-5 w-5 text-emerald-500 shrink-0" />
-                        <div>
-                          <p className="text-sm font-bold text-slate-900">150+ Volunteer Hours</p>
-                          <p className="text-xs text-slate-500">Verified by Red Cross Coordinator</p>
+                          <p className="text-sm font-bold text-slate-900">Portfolio Started</p>
+                          <p className="text-xs text-slate-500">Verified via TeenLaunch</p>
                         </div>
                       </div>
                     </div>

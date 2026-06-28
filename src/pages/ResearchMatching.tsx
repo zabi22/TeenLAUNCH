@@ -59,36 +59,13 @@ export default function ResearchMatching() {
           </div>
 
           <div className="space-y-4">
-            {[
-              { name: "Dr. Sarah Jenkins", type: "Professor / PI", uni: "Stanford University", topic: "Machine Learning & Healthcare", match: 94 },
-              { name: "Quantum Computing Lab", type: "Research Group", uni: "MIT", topic: "Quantum Algorithms", match: 88 },
-              { name: "Bioinformatics Summer Institute", type: "Program", uni: "Johns Hopkins", topic: "Genomics", match: 76 }
-            ].map((res, i) => (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} key={i} className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-indigo-300 transition-colors">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600">
-                    <Target className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-lg">{res.name}</h3>
-                    <p className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                      {res.type} <span className="w-1 h-1 bg-slate-300 rounded-full" /> {res.uni}
-                    </p>
-                    <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg">
-                      {res.topic}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 md:flex-col md:items-end">
-                  <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-100">
-                    <Star className="h-4 w-4 fill-emerald-500 text-emerald-500" /> {res.match}% Match
-                  </div>
-                  <button className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:text-indigo-800">
-                    View Profile <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </motion.div>
-            ))}
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center">
+              <Microscope className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+              <h3 className="font-bold text-slate-900 text-lg mb-2">No matches found</h3>
+              <p className="text-slate-500 text-sm">
+                Try adjusting your search criteria or explore other fields to find research opportunities.
+              </p>
+            </div>
           </div>
         </div>
       </div>
