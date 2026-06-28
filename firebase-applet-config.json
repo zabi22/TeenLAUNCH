@@ -1,10 +1,10 @@
 {
-  "projectId": "conductive-setting-r8gvj",
-  "appId": "1:1027915118717:web:a67a84db33d6bf88141914",
-  "apiKey": "AIzaSyD6YCfWjquNwRr-oSDPMqydPaIKK3EL3qo",
-  "authDomain": "conductive-setting-r8gvj.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-teenlaunch-86952bfa-ce13-4d27-ba70-6cf76202df8a",
-  "storageBucket": "conductive-setting-r8gvj.firebasestorage.app",
-  "messagingSenderId": "1027915118717",
-  "measurementId": ""
+  "apiKey": "AIzaSyA0dZ2jgu1fyGB-XQ2ND2nGb0EedlHOK44",
+  "authDomain": "teenlaunch-prod.firebaseapp.com",
+  "projectId": "teenlaunch-prod",
+  "storageBucket": "teenlaunch-prod.firebasestorage.app",
+  "messagingSenderId": "1029315268575",
+  "appId": "1:1029315268575:web:b659f119a0110b6458fe6a",
+  "measurementId": "G-1N6JT7VP9L",
+  "firestoreDatabaseId": "(default)"
 }
