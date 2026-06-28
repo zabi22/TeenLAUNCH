@@ -148,26 +148,62 @@ export class AIProviderManagerService {
     
     const modelName = options.isComplex ? "gemini-3.1-pro-preview" : "gemini-3.5-flash";
 
-    if (options.history && options.history.length > 0) {
-      const formattedHistory = options.history.map((msg) => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
-      }));
-      
-      const chat = aiClient.chats.create({
-        model: modelName,
-        history: formattedHistory,
-        config
-      });
-      const response = await chat.sendMessage({ message: options.prompt });
-      return response.text;
-    } else {
-      const response = await aiClient.models.generateContent({
-        model: modelName,
-        contents: options.prompt,
-        config
-      });
-      return response.text.trim();
+    try {
+      if (options.history && options.history.length > 0) {
+        const formattedHistory = options.history.map((msg) => ({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text }]
+        }));
+        
+        const chat = aiClient.chats.create({
+          model: modelName,
+          history: formattedHistory,
+          config
+        });
+        const response = await chat.sendMessage({ message: options.prompt });
+        return response.text;
+      } else {
+        const response = await aiClient.models.generateContent({
+          model: modelName,
+          contents: options.prompt,
+          config
+        });
+        return response.text.trim();
+      }
+    } catch (err: any) {
+      if (modelName === "gemini-3.1-pro-preview") {
+        console.warn(`[AI Provider] gemini-3.1-pro-preview failed, falling back to gemini-3.5-flash. Error: ${err?.message || err}`);
+        
+        const fallbackConfig: any = {
+          systemInstruction: options.systemInstruction,
+        };
+        if (options.isJson) {
+          fallbackConfig.responseMimeType = "application/json";
+        }
+
+        if (options.history && options.history.length > 0) {
+          const formattedHistory = options.history.map((msg) => ({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text: msg.text }]
+          }));
+          
+          const chat = aiClient.chats.create({
+            model: "gemini-3.5-flash",
+            history: formattedHistory,
+            config: fallbackConfig
+          });
+          const response = await chat.sendMessage({ message: options.prompt });
+          return response.text;
+        } else {
+          const response = await aiClient.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: options.prompt,
+            config: fallbackConfig
+          });
+          return response.text.trim();
+        }
+      }
+      throw err;
     }
   }
 
