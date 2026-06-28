@@ -213,39 +213,7 @@ TeenLaunch measures real-world outcomes:
 
 Because opportunities only matter when they create results.
 
----
 
-# 🚀 Getting Started
-
-### Clone Repository
-
-```bash
-git clone https://github.com/yourusername/teenlaunch.git
-```
-
-### Install Dependencies
-
-```bash
-npm install
-```
-
-### Configure Environment
-
-```bash
-cp .env.example .env.local
-```
-
-### Start Development Server
-
-```bash
-npm run dev
-```
-
-### Build Production Version
-
-```bash
-npm run build
-```
 
 ---
 
@@ -296,25 +264,6 @@ Student data should always remain protected.
 
 ---
 
-# 🤝 Contributing
-
-We welcome contributions from developers, students, educators, researchers, and mentors.
-
-```bash
-Fork → Branch → Commit → Pull Request
-```
-
-Together we can build the future of student opportunity.
-
----
-
-# 📜 License
-
-MIT License
-
-See `LICENSE` for details.
-
----
 
 <div align="center">
 
