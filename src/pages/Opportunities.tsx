@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Search, MapPin, Calendar, ExternalLink, Bookmark, Filter, Globe, Sparkles, GraduationCap, DollarSign, Clock } from "lucide-react";
 import { useAuth } from "../components/AuthContext.tsx";
 import { cn } from "../lib/utils.ts";
+import { EmptyState } from "../components/EmptyState";
 
 export default function Opportunities() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -25,25 +26,53 @@ export default function Opportunities() {
   const [bookmarks, setBookmarks] = useState<number[]>([]);
 
   useEffect(() => {
+    if (appUser?.country && countryFilter === "All") {
+      setCountryFilter(appUser.country);
+    }
+  }, [appUser]);
+
+  useEffect(() => {
     fetchOpportunities();
     if (user) {
       fetchBookmarks();
     }
-  }, [user]);
+  }, [user, countryFilter]);
 
   const fetchOpportunities = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/opportunities");
+      const token = await user?.getIdToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      
+      const queryParams = new URLSearchParams();
+      if (searchTerm) queryParams.set("q", searchTerm);
+      
+      // Pass the UI filter explicitly so the backend uses it instead of defaulting to user's profile country
+      if (countryFilter) {
+        queryParams.set("country", countryFilter);
+      }
+      
+      const url = `/api/opportunities?${queryParams.toString()}`;
+      const res = await fetch(url, { headers });
       if (res.ok) {
         const data = await res.json();
-        setOpportunities(data);
+        setOpportunities(data.results || data);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  // We should debounce fetchOpportunities if search changes, but since this is an MVP we'll trigger it on search.
+  // Actually, we'll let a "Search" button trigger it, or trigger on enter.
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchOpportunities();
   };
 
   const fetchBookmarks = async () => {
@@ -130,19 +159,54 @@ export default function Opportunities() {
     "All",
     "United States",
     "Canada",
-    "United Kingdom",
-    "Australia",
-    "Germany",
-    "France",
-    "India",
-    "Singapore",
-    "United Arab Emirates",
-    "Saudi Arabia",
-    "South Africa",
-    "Brazil",
     "Mexico",
+    "United Kingdom",
+    "Ireland",
+    "France",
+    "Germany",
+    "Italy",
+    "Spain",
+    "Portugal",
+    "Netherlands",
+    "Belgium",
+    "Switzerland",
+    "Austria",
+    "Sweden",
+    "Norway",
+    "Denmark",
+    "Finland",
+    "Poland",
+    "Czech Republic",
+    "Hungary",
+    "Romania",
+    "Greece",
+    "Turkey",
+    "Ukraine",
+    "India",
+    "Pakistan",
+    "Bangladesh",
+    "Sri Lanka",
+    "Nepal",
+    "China",
     "Japan",
     "South Korea",
+    "Singapore",
+    "Malaysia",
+    "Indonesia",
+    "Thailand",
+    "Vietnam",
+    "Philippines",
+    "Australia",
+    "New Zealand",
+    "South Africa",
+    "Nigeria",
+    "Kenya",
+    "Egypt",
+    "Brazil",
+    "Argentina",
+    "Chile",
+    "Colombia",
+    "Peru",
     "Global",
     "Other"
   ];
@@ -180,14 +244,9 @@ export default function Opportunities() {
   };
 
   const filteredOpportunities = opportunities.filter(op => {
-    // 1. Search filter
-    const matchesSearch = op.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          op.organization.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          op.description.toLowerCase().includes(searchTerm.toLowerCase());
-    
     // 2. Category filter
     const matchesCategory = categoryFilter === "All" || 
-                            op.category.toLowerCase().includes(categoryFilter.toLowerCase().replace("opportunities", "volunteer").replace("programs", "").trim());
+                            (op.category && op.category.toLowerCase().includes(categoryFilter.toLowerCase().replace("opportunities", "volunteer").replace("programs", "").trim()));
 
     // 3. Country filter
     const matchesCountry = countryFilter === "All" || 
@@ -218,7 +277,7 @@ export default function Opportunities() {
       }
     }
 
-    return matchesSearch && matchesCategory && matchesCountry && matchesGrade && matchesRemote && matchesPaid && matchesLength;
+    return matchesCategory && matchesCountry && matchesGrade && matchesRemote && matchesPaid && matchesLength;
   });
 
   // Prioritize country-based matches first
@@ -253,16 +312,21 @@ export default function Opportunities() {
           </p>
         </div>
         <div className="w-full md:max-w-md relative">
-          <input 
-            type="text" 
-            placeholder="Search title, org, or eligibility..." 
-            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm font-medium text-slate-700"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <div className="absolute left-4 top-3.5 text-slate-400">
-            <Search className="h-4 w-4" />
-          </div>
+          <form onSubmit={handleSearchSubmit} className="relative w-full">
+            <input 
+              type="text" 
+              placeholder="Search title, org, or eligibility..." 
+              className="w-full pl-11 pr-24 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm font-medium text-slate-700"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <div className="absolute left-4 top-3.5 text-slate-400">
+              <Search className="h-4 w-4" />
+            </div>
+            <button type="submit" className="absolute right-2 top-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-500 transition-colors">
+              Search
+            </button>
+          </form>
         </div>
       </div>
 
@@ -494,6 +558,20 @@ export default function Opportunities() {
                       </p>
                     )}
 
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold mb-4">
+                       <span className="flex items-center gap-1">
+                          <Globe className="h-3 w-3 text-amber-500" /> Trust: {op.trustScore || 85}/100
+                       </span>
+                       {op.competitionLevel && (
+                         <span className={cn("px-2 py-0.5 rounded", 
+                           op.competitionLevel === "Low" ? "bg-emerald-50 text-emerald-600" :
+                           op.competitionLevel === "Medium" ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
+                         )}>
+                           {op.competitionLevel} Comp.
+                         </span>
+                       )}
+                    </div>
+
                     {/* Meta section */}
                     <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 mb-4">
                       <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
@@ -502,11 +580,9 @@ export default function Opportunities() {
                       </div>
                       <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 justify-end">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">{op.isRemote ? "Virtual" : (op.location || "Varies")}</span>
+                        <span className="truncate">{op.isRemote ? "Virtual" : (op.city ? `${op.city}, ${op.region || ''}` : op.location || "Varies")}</span>
                       </div>
                     </div>
-
-                    {/* AI Match Badge or standard score */}
                     {matchScore !== null && (
                       <div className="flex items-center justify-between bg-indigo-50/50 border border-indigo-100/60 px-3 py-2 rounded-xl mb-4">
                         <div className="flex items-center gap-1.5 text-xs text-indigo-700 font-bold">
@@ -529,17 +605,20 @@ export default function Opportunities() {
               })}
             </div>
           ) : (
-            <div className="text-center py-24 bg-slate-50 rounded-3xl border border-slate-200 border-dashed">
-              <h3 className="text-xl font-bold text-slate-900 mb-2">No opportunities found</h3>
-              <p className="text-slate-500 mb-6">Try adjusting your global search filters or select another country.</p>
-              <button 
-                onClick={discoverOpportunitiesWithAI}
-                disabled={isDiscovering}
-                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 mx-auto cursor-pointer"
-              >
-                <Sparkles className="h-4 w-4" /> Run AI Scout to find some!
-              </button>
-            </div>
+            <EmptyState 
+              icon={Search}
+              title="No opportunities found"
+              description="Try adjusting your global search filters or select another country."
+              action={
+                <button 
+                  onClick={discoverOpportunitiesWithAI}
+                  disabled={isDiscovering}
+                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 mx-auto cursor-pointer"
+                >
+                  <Sparkles className="h-4 w-4" /> {isDiscovering ? "Running AI Scout..." : "Run AI Scout to find some!"}
+                </button>
+              }
+            />
           )}
         </div>
       </div>

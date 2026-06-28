@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./components/AuthContext.tsx";
 import Layout from "./components/Layout.tsx";
 import Landing from "./pages/Landing.tsx";
@@ -22,6 +22,18 @@ import CareerSimulator from "./pages/CareerSimulator.tsx";
 import EssayAssistant from "./pages/EssayAssistant.tsx";
 import Network from "./pages/Network.tsx";
 import Leaderboard from "./pages/Leaderboard.tsx";
+import AIAgents from "./pages/AIAgents.tsx";
+import ImpactAnalytics from "./pages/ImpactAnalytics.tsx";
+import ParentDashboard from "./pages/ParentDashboard.tsx";
+import CounselorDashboard from "./pages/CounselorDashboard.tsx";
+import InterviewPrep from "./pages/InterviewPrep.tsx";
+import DiscoveryDashboard from "./pages/DiscoveryDashboard.tsx";
+import DigitalTwin from "./pages/DigitalTwin.tsx";
+import PortfolioBuilder from "./pages/PortfolioBuilder.tsx";
+import ResearchMatching from "./pages/ResearchMatching.tsx";
+import OpportunityMarketplace from "./pages/OpportunityMarketplace.tsx";
+
+import Messages from "./pages/Messages.tsx";
 
 export default function App() {
   return (
@@ -30,6 +42,11 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Landing />} />
+            <Route path="twin" element={<DigitalTwin />} />
+            <Route path="portfolio" element={<PortfolioBuilder />} />
+            <Route path="research" element={<ResearchMatching />} />
+            <Route path="marketplace" element={<OpportunityMarketplace />} />
+            <Route path="messages" element={<Messages />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="opportunities" element={<Opportunities />} />
             <Route path="opportunities/:id" element={<OpportunityDetail />} />
@@ -43,8 +60,15 @@ export default function App() {
             <Route path="founder" element={<FounderMode />} />
             <Route path="career" element={<CareerSimulator />} />
             <Route path="essay" element={<EssayAssistant />} />
+            <Route path="interview" element={<InterviewPrep />} />
             <Route path="network" element={<Network />} />
             <Route path="leaderboard" element={<Leaderboard />} />
+            <Route path="agents" element={<AIAgents />} />
+            <Route path="analytics" element={<ImpactAnalytics />} />
+            <Route path="discovery" element={<DiscoveryDashboard />} />
+            <Route path="parent" element={<ParentDashboard />} />
+            <Route path="counselor" element={<CounselorDashboard />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>

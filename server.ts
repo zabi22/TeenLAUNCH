@@ -3,132 +3,12 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
 import { db } from "./src/db/index.ts";
+import { adminDb, adminAuth } from "./src/lib/firebase-admin.ts";
 import { opportunities, bookmarks, users, academicProfiles, applications, activities, posts, postReactions, postComments, connections, notifications, verificationRequests } from "./src/db/schema.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
-import { eq, desc, and, lt, or } from "drizzle-orm";
+import { eq, desc, and, lt, or, sql } from "drizzle-orm";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-
-let geminiAi: GoogleGenAI | null = null;
-function getGeminiAi() {
-  if (!geminiAi) {
-    if (!process.env.GEMINI_API_KEY) {
-      console.warn("GEMINI_API_KEY not set.");
-    }
-    geminiAi = new GoogleGenAI({ 
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
-  return geminiAi;
-}
-
-async function fallbackToGroq(systemInstruction: string, history: any[], message: string, isJson: boolean = false): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("GROQ_API_KEY not set");
-
-  const messages = [
-    { role: "system", content: systemInstruction },
-    ...history.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text })),
-    { role: "user", content: message }
-  ];
-
-  const groqModels = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "mixtral-8x7b-32768"
-  ];
-
-  let lastError = null;
-  for (const model of groqModels) {
-    try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          response_format: isJson ? { type: "json_object" } : undefined
-        })
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Groq API error (${model}): ${res.status} ${text}`);
-      }
-      
-      const data = await res.json();
-      return data.choices[0].message.content;
-    } catch (err) {
-      lastError = err;
-      console.warn(`[AI Provider] Groq model ${model} failed, trying next...`);
-    }
-  }
-
-  throw lastError || new Error("All Groq models failed");
-}
-
-async function fallbackToOpenRouter(systemInstruction: string, history: any[], message: string, isJson: boolean = false): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY not set");
-
-  const messages = [
-    { role: "system", content: systemInstruction },
-    ...history.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text })),
-    { role: "user", content: message }
-  ];
-
-  const modelsToTry = [
-    "google/gemma-4-31b-it:free",  // Preferred 1
-    "qwen/qwen3-coder:free",       // Preferred 2
-    "openai/gpt-oss-120b:free",    // Preferred 3
-    "qwen/qwen-2.5-coder-32b-instruct:free", // Active free coding model
-    "google/gemma-2-9b-it:free",             // Active free Gemma
-    "meta-llama/llama-3.1-8b-instruct:free", // Active free Llama
-    "deepseek/deepseek-r1:free",             // Active free DeepSeek R1
-    "mistralai/mistral-7b-instruct:free"     // Active free Mistral
-  ];
-
-  let lastError = null;
-
-  for (const model of modelsToTry) {
-    try {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://teenlaunch.app", 
-          "X-Title": "TeenLaunch"
-        },
-        body: JSON.stringify({
-          model: model,
-          messages,
-          response_format: isJson ? { type: "json_object" } : undefined
-        })
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`OpenRouter API error (${model}): ${res.status} ${text}`);
-      }
-      
-      const data = await res.json();
-      return data.choices[0].message.content;
-    } catch (err) {
-      lastError = err;
-      console.warn(`[AI Provider] OpenRouter model ${model} failed, trying next...`);
-    }
-  }
-
-  throw lastError || new Error("All OpenRouter free models failed");
-}
+import { aiProviderManager, AIHistoryMessage, AIGenerateOptions } from "./src/lib/AIProviderManager.ts";
 
 function cleanAndParseJson(text: string): any {
   let cleaned = text.trim();
@@ -166,72 +46,35 @@ function cleanAndParseJson(text: string): any {
 export async function generateChatContent(
   systemInstruction: string,
   history: any[],
-  message: string
+  message: string,
+  isComplex: boolean = false
 ): Promise<string> {
-  try {
-     const aiClient = getGeminiAi();
-     const formattedHistory = history ? history.map((msg: any) => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
-      })) : [];
-      
-      const chat = aiClient.chats.create({
-        model: "gemini-3.1-pro-preview",
-        history: formattedHistory,
-        config: {
-          systemInstruction,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
-        }
-      });
-      const response = await chat.sendMessage({ message });
-      console.log("[AI Provider] Handled by: Gemini API");
-      return response.text;
-  } catch (geminiError) {
-     console.error("[AI Provider] Gemini failed, trying Groq:", geminiError);
-     try {
-       const response = await fallbackToGroq(systemInstruction, history, message, false);
-       console.log("[AI Provider] Handled by: Groq API");
-       return response;
-     } catch (groqError) {
-       console.error("[AI Provider] Groq failed, trying OpenRouter:", groqError);
-       const response = await fallbackToOpenRouter(systemInstruction, history, message, false);
-       console.log("[AI Provider] Handled by: OpenRouter API");
-       return response;
-     }
-  }
+  const formattedHistory: AIHistoryMessage[] = history ? history.map((msg: any) => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    text: msg.text
+  })) : [];
+  
+  return aiProviderManager.generateContent({
+    systemInstruction,
+    history: formattedHistory,
+    prompt: message,
+    isComplex,
+    isJson: false
+  });
 }
 
 export async function generateContentManager(
   systemInstruction: string,
   prompt: string,
-  isJson: boolean = false
+  isJson: boolean = false,
+  isComplex: boolean = false
 ): Promise<string> {
-   try {
-     const aiClient = getGeminiAi();
-     const response = await aiClient.models.generateContent({
-        model: "gemini-3.1-pro-preview",
-        contents: prompt,
-        config: {
-          systemInstruction,
-          responseMimeType: isJson ? "application/json" : "text/plain",
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
-        }
-      });
-      console.log("[AI Provider] Handled by: Gemini API");
-      return response.text.trim();
-   } catch (geminiError) {
-     console.error("[AI Provider] Gemini failed, trying Groq:", geminiError);
-     try {
-       const response = await fallbackToGroq(systemInstruction, [], prompt, isJson);
-       console.log("[AI Provider] Handled by: Groq API");
-       return response;
-     } catch (groqError) {
-       console.error("[AI Provider] Groq failed, trying OpenRouter:", groqError);
-       const response = await fallbackToOpenRouter(systemInstruction, [], prompt, isJson);
-       console.log("[AI Provider] Handled by: OpenRouter API");
-       return response;
-     }
-   }
+  return aiProviderManager.generateContent({
+    systemInstruction,
+    prompt,
+    isJson,
+    isComplex
+  });
 }
 
 async function seedOpportunitiesIfEmpty() {
@@ -585,7 +428,17 @@ async function startServer() {
     try {
       if (!req.user) return res.status(401).json({ error: "Unauthorized" });
       const user = await getOrCreateUser(req.user.uid, req.user.email || "", req.user.name);
+      
       res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/users/students", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const studentsList = await db.select().from(users);
+      res.json(studentsList);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -610,6 +463,7 @@ async function startServer() {
         .set({ grade, interests, goals, country })
         .where(eq(users.uid, req.user.uid))
         .returning();
+
       res.json(updatedUser[0]);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -730,8 +584,146 @@ async function startServer() {
         console.error("Cleanup outdated opportunities failed:", cleanError);
       }
 
-      const allOpportunities = await db.select().from(opportunities).orderBy(desc(opportunities.createdAt));
-      res.json(allOpportunities);
+      // Query parameters
+      const q = (req.query.q as string) || "";
+      const page = parseInt(req.query.page as string) || 1;
+      const perPage = parseInt(req.query.per_page as string) || 20;
+      const relax = req.query.relax === "true";
+      
+      let userCountry = (req.query.country as string) || "";
+      let userGrade = "";
+      if (!userCountry && req.headers.authorization) {
+        try {
+          const authHeader = req.headers.authorization;
+          const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : authHeader;
+          const decodedToken = await adminAuth.verifyIdToken(token);
+          if (decodedToken && decodedToken.uid) {
+            const userRecords = await db.select().from(users).where(eq(users.uid, decodedToken.uid));
+            if (userRecords.length > 0) {
+              const data = userRecords[0];
+              userCountry = data.country || "";
+              userGrade = data.grade || "";
+            }
+          }
+        } catch (authError) {
+          console.warn("Optional auth lookup for opportunity prioritization failed:", authError);
+        }
+      }
+
+      const offset = (page - 1) * perPage;
+      let conditions = [];
+      
+      if (q) {
+        const searchPattern = `%${q}%`;
+        conditions.push(
+          or(
+            sql`${opportunities.title} ILIKE ${searchPattern}`,
+            sql`${opportunities.organization} ILIKE ${searchPattern}`,
+            sql`${opportunities.description} ILIKE ${searchPattern}`
+          )
+        );
+      }
+
+      if (userCountry && userCountry.toLowerCase() !== "all") {
+        if (!relax) {
+          conditions.push(
+            or(
+              sql`lower(${opportunities.country}) = ${userCountry.toLowerCase()}`,
+              sql`lower(${opportunities.country}) = 'global'`,
+              eq(opportunities.isRemote, true)
+            )
+          );
+        }
+      }
+
+      // In relax mode, we don't enforce strict country filtering if results are low, but here we just order them
+      
+      let allOps;
+      if (conditions.length > 0) {
+         allOps = await db.select().from(opportunities).where(and(...conditions));
+      } else {
+         allOps = await db.select().from(opportunities);
+      }
+
+      // Manual sorting and scoring for "relevance"
+      const scoredOps = allOps.map(op => {
+        let score = 0;
+        let explain = [];
+        
+        if (q) {
+          const qLower = q.toLowerCase();
+          if (op.title.toLowerCase().includes(qLower)) { score += 50; explain.push("Title match"); }
+          if (op.organization.toLowerCase().includes(qLower)) { score += 30; explain.push("Organization match"); }
+          if (op.description.toLowerCase().includes(qLower)) { score += 10; explain.push("Description match"); }
+        }
+        
+        if (userCountry) {
+          if (op.country.toLowerCase() === userCountry.toLowerCase()) {
+            score += 20; explain.push("Country match");
+          } else if (op.country.toLowerCase() === 'global') {
+            score += 10; explain.push("Global availability");
+          } else {
+            score -= 10;
+          }
+        }
+        
+        if (op.deadline) {
+           const deadlineDate = new Date(op.deadline);
+           const timeDiff = deadlineDate.getTime() - new Date().getTime();
+           const daysUntil = Math.ceil(timeDiff / (1000 * 3600 * 24));
+           if (daysUntil > 0 && daysUntil <= 30) {
+             score += 15; explain.push("Approaching deadline");
+           }
+        }
+
+        return { ...op, score, explain, provenance: "internal_db" };
+      });
+
+      scoredOps.sort((a, b) => b.score - a.score || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // If strict filter yielded few results and relax is true, we could theoretically fetch more, but we already fetched all matching `q`
+      
+      const totalCount = scoredOps.length;
+      const paginatedResults = scoredOps.slice(offset, offset + perPage);
+
+      res.json({
+         results: paginatedResults,
+         total: totalCount,
+         page,
+         per_page: perPage,
+         has_more: offset + perPage < totalCount
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/opportunities/stats", async (req, res) => {
+    try {
+      const allOps = await db.select().from(opportunities);
+      const total = allOps.length;
+      
+      const newToday = allOps.filter(o => {
+        if (!o.createdAt) return false;
+        const opDate = new Date(o.createdAt);
+        const today = new Date();
+        return opDate.toDateString() === today.toDateString();
+      }).length;
+
+      const verifiedCount = allOps.filter(o => o.isVerified).length;
+
+      const categories = allOps.reduce((acc: any, op) => {
+        acc[op.category] = (acc[op.category] || 0) + 1;
+        return acc;
+      }, {});
+
+      const bySource = allOps.reduce((acc: any, op) => {
+        const source = op.source || "unknown";
+        acc[source] = (acc[source] || 0) + 1;
+        return acc;
+      }, {});
+
+      res.json({ total, newToday, verifiedCount, categories, bySource });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -764,7 +756,14 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
     "gradeLevel": "e.g. '10th Grade, 11th Grade' or 'All'",
     "ageRequirement": "e.g. '15+' or '14-18' or null",
     "isPaid": true or false,
-    "programLength": "e.g. '6 weeks' or '3 months' or 'Summer'"
+    "programLength": "e.g. '6 weeks' or '3 months' or 'Summer'",
+    "competitionLevel": "Low, Medium, or High",
+    "acceptanceRate": "integer between 1 and 100 or null",
+    "trustScore": "integer between 70 and 100",
+    "completenessScore": "integer between 70 and 100",
+    "isVerified": true or false,
+    "source": "e.g. 'university_scraper', 'community_submission', 'partner_api'",
+    "collegeValueScore": "integer between 50 and 100"
   }
 ]`;
 
@@ -809,6 +808,13 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
           ageRequirement: op.ageRequirement || null,
           isPaid: !!op.isPaid,
           programLength: op.programLength || null,
+          competitionLevel: op.competitionLevel || "Medium",
+          acceptanceRate: typeof op.acceptanceRate === 'number' ? op.acceptanceRate : null,
+          trustScore: typeof op.trustScore === 'number' ? op.trustScore : 85,
+          completenessScore: typeof op.completenessScore === 'number' ? op.completenessScore : 80,
+          isVerified: !!op.isVerified,
+          source: op.source || "gemini_scout",
+          collegeValueScore: typeof op.collegeValueScore === 'number' ? op.collegeValueScore : 75,
         };
 
         const inserted = await db.insert(opportunities).values(opToInsert).returning();
@@ -854,11 +860,11 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
         return res.status(400).json({ error: "Message is required." });
       }
 
-      const systemInstruction = `You are the TeenLaunch AI Coach, an always-available strategic mentor for a high school student aiming for top universities and ambitious career goals.
-You are encouraging, analytical, and highly actionable. Provide specific advice on academics, extracurriculars, and leadership.
-Keep your responses concise and readable (using markdown). Focus on helping the student optimize their profile and discover opportunities.`;
+      const systemInstruction = `You are the TeenLaunch Student Digital Twin AI, an ultra-advanced, always-available strategic mentor for a high school student aiming for elite universities and world-class career goals.
+You are powered by Gemini High Thinking mode. You act as a predictive intelligence and success strategist. Provide highly tactical, actionable advice on academics, venture creation, internships, and scholarships.
+Keep your responses concise, highly professional, and structured with clean markdown. Your goal is to maximize the student's probability of success.`;
       
-      const responseText = await generateChatContent(systemInstruction, history, message);
+      const responseText = await generateChatContent(systemInstruction, history, message, true);
 
       res.json({ text: responseText });
     } catch (error: any) {
@@ -952,6 +958,7 @@ Output MUST be a JSON object with this exact structure:
       const textResponse = await generateContentManager(
         systemInstruction,
         `Essay Prompt: ${prompt}\n\nStudent Draft:\n${draft}`,
+        true,
         true
       );
       
@@ -995,6 +1002,7 @@ Provide 3 highly distinct and creative ideas.`;
       const textResponse = await generateContentManager(
         systemInstruction,
         `Essay Prompt: ${prompt}\n\nPlease brainstorm ideas.`,
+        true,
         true
       );
       
@@ -1069,22 +1077,25 @@ Types should be one of: Extracurricular, Competition, Academics, Service, Projec
         return res.status(400).json({ error: "College and profile are required." });
       }
 
-      const systemInstruction = `You are an elite college admissions advisor.
+      const systemInstruction = `You are the TeenLaunch AI Admissions Simulator. You simulate admissions review for top universities.
 Analyze the student's competitiveness for ${college} (Major: ${major || "Undecided"}).
 Student Profile: ${JSON.stringify(profile)}
 Student Activities: ${JSON.stringify(activities)}
 
+Use high-level strategic reasoning to provide a brutal, accurate admissions simulation.
 Return ONLY valid JSON with this structure:
 {
   "chances": 45,
   "category": "Reach",
-  "missing": ["Need higher SAT", "Need more leadership"],
+  "missing": ["Need higher SAT", "Need more leadership in STEM"],
   "strengths": ["Strong GPA", "Good AP count"],
-  "analysis": "A short 2-3 sentence summary."
+  "analysis": "A concise 2-3 sentence strategic summary outlining the probabilistic path to acceptance."
 }`;
 
-      const textResponse = await generateContentManager(
+      // We use HIGH thinking mode via isComplex flag (generateChatContent)
+      const textResponse = await generateChatContent(
         systemInstruction,
+        [],
         `Analyze college competitiveness for ${college}.`,
         true
       );
@@ -1884,6 +1895,68 @@ Return ONLY valid JSON with this structure:
       }
 
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/agents/chat", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { agentId, message, history } = req.body;
+      let systemInstruction = "You are a helpful AI assistant.";
+      
+      switch(agentId) {
+        case "admissions":
+          systemInstruction = "You are an Ivy League & Top-Tier Admissions Strategist. You provide high-level narrative and strategy advice for college applications. Be concise, strategic, and brutally honest but encouraging.";
+          break;
+        case "scholarship":
+          systemInstruction = "You are a Scholarship Hunter AI. You find obscure scholarships, calculate ROI, and advise students on financial aid strategy.";
+          break;
+        case "career":
+          systemInstruction = "You are a Career Architect AI. You help reverse-engineer career paths from 10-year goals, suggesting internships, pathways, and skills.";
+          break;
+        case "founder":
+          systemInstruction = "You are a Startup Mentor AI for ambitious teens. You evaluate ideas, suggest pivots, and help structure pitches for venture-scale ideas.";
+          break;
+        case "essay":
+          systemInstruction = "You are an Elite Essay Reviewer. You provide narrative and tone coaching. Do not just fix grammar; analyze the emotional hook and structure.";
+          break;
+      }
+
+      // We use HIGH thinking level via generateChatContent's isComplex flag
+      const reply = await generateChatContent(systemInstruction, history, message, true);
+      res.json({ reply });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/twin/analyze", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { targetGoal } = req.body;
+      const systemInstruction = `You are the TeenLaunch Student Digital Twin AI.
+You perform Gap Analysis and generate Opportunity Roadmaps for ambitious students.
+The student's target goal is ${targetGoal}. 
+Assume a baseline smart student who has good grades (3.8 GPA) but lacks highly specific spikes.
+Return ONLY valid JSON with this structure:
+{
+  "readiness": {
+    "college": 75,
+    "scholarship": 60,
+    "internship": 40,
+    "research": 30
+  },
+  "gaps": [
+    { "title": "Lack of Independent Research", "severity": "High", "description": "No published or structured research in CS.", "recommendation": "Cold email 10 local university professors asking to assist in ML labs." }
+  ],
+  "roadmap": [
+    { "timeframe": "Next 3 Months", "action": "Secure Research Mentor", "details": "Utilize the Research Matching engine to find a local PI." }
+  ]
+}`;
+      const response = await generateChatContent(systemInstruction, [], "Run analysis", true);
+      const cleaned = response.replace(/```json\n?|\n?```/g, "").trim();
+      res.json(JSON.parse(cleaned));
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

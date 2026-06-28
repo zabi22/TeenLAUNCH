@@ -4,7 +4,7 @@ import {
   LogOut, LayoutDashboard, Search, User as UserIcon, 
   Map, Activity, Target, Briefcase, GraduationCap, 
   Award, Zap, Users, Shield, Sparkles, FolderOpen,
-  Menu, X, PenTool
+  Menu, X, PenTool, Mic, Globe, MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
@@ -29,27 +29,40 @@ export default function Layout() {
 
   const navItems = [
     { section: "Core", items: [
-      { name: "AI Coach", path: "/dashboard", icon: Sparkles },
+      { name: "Digital Twin", path: "/twin", icon: Sparkles },
+      { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+      { name: "AI Agent Ecosystem", path: "/agents", icon: Zap },
       { name: "Opportunity Scout", path: "/opportunities", icon: Search },
+      { name: "Discovery Network", path: "/discovery", icon: Globe },
       { name: "Strategic Roadmap", path: "/roadmap", icon: Map },
     ]},
-    { section: "Community", items: [
+    { section: "Network", items: [
       { name: "Student Network", path: "/network", icon: Users },
-      { name: "Global Leaderboard", path: "/leaderboard", icon: Award },
+      { name: "Messages", path: "/messages", icon: MessageSquare },
+      { name: "Research Matching", path: "/research", icon: Search },
+      { name: "Leaderboard", path: "/leaderboard", icon: Award },
+      { name: "Opportunity Market", path: "/marketplace", icon: Briefcase },
     ]},
-    { section: "Academics & College", items: [
+    { section: "Academics", items: [
       { name: "Academic Profile", path: "/academic-profile", icon: GraduationCap },
-      { name: "University Explorer", path: "/analyzer", icon: Target },
+      { name: "College Analyzer", path: "/analyzer", icon: Target },
       { name: "Essay Assistant", path: "/essay", icon: PenTool },
-      { name: "App Success Center", path: "/applications", icon: Shield },
+      { name: "Interview Prep", path: "/interview", icon: Mic },
+      { name: "App Tracker", path: "/applications", icon: Shield },
     ]},
     { section: "Experience", items: [
+      { name: "Portfolio Builder", path: "/portfolio", icon: FolderOpen },
       { name: "Activity Tracker", path: "/activities", icon: Activity },
-      { name: "Achievement Vault", path: "/vault", icon: FolderOpen },
+      { name: "Achievement Vault", path: "/vault", icon: Shield },
       { name: "Founder Mode", path: "/founder", icon: Zap },
     ]},
     { section: "Future", items: [
       { name: "Career Simulator", path: "/career", icon: Briefcase },
+      { name: "Impact Analytics", path: "/analytics", icon: Activity },
+    ]},
+    { section: "Portals", items: [
+      { name: "Parent Portal", path: "/parent", icon: UserIcon },
+      { name: "Counselor Portal", path: "/counselor", icon: Shield },
     ]}
   ];
 
@@ -59,7 +72,7 @@ export default function Layout() {
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between bg-slate-900 p-4 border-b border-slate-800">
         <Link to="/" className="flex items-center gap-2">
-          <Logo variant="dark" size="sm" />
+          <Logo variant="dark" className="h-10 w-auto" />
         </Link>
         <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white p-2">
           {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -80,7 +93,7 @@ export default function Layout() {
           >
             <div className="p-6 hidden md:flex items-center gap-3">
               <Link to="/">
-                <Logo variant="dark" size="md" />
+                <Logo variant="dark" className="h-10 w-auto" />
               </Link>
             </div>
 

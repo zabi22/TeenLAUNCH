@@ -9,7 +9,7 @@ export const users = pgTable('users', {
   grade: text('grade'),
   interests: text('interests'), // Stored as comma-separated or JSON string for simplicity
   goals: text('goals'),
-  country: text('country').default('United States'),
+  country: text('country'),
   avatarUrl: text('avatar_url'),
   headline: text('headline'),
   bio: text('bio'),
@@ -81,6 +81,17 @@ export const opportunities = pgTable('opportunities', {
   ageRequirement: text('age_requirement'),
   isPaid: boolean('is_paid').default(false),
   programLength: text('program_length'),
+  
+  // Opportunity Discovery Engine Fields
+  competitionLevel: text('competition_level').default('Medium'), // 'Low', 'Medium', 'High'
+  acceptanceRate: integer('acceptance_rate'), // e.g., 20
+  trustScore: integer('trust_score').default(0), // 0 to 100
+  completenessScore: integer('completeness_score').default(0), // 0 to 100
+  isVerified: boolean('is_verified').default(false),
+  source: text('source'), // e.g., "university_scraper", "manual", "partner_api"
+  discoveryDate: timestamp('discovery_date').defaultNow(),
+  collegeValueScore: integer('college_value_score').default(50), // 0 to 100
+  
   createdAt: timestamp('created_at').defaultNow(),
 });
 

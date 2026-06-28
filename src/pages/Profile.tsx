@@ -2,6 +2,8 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useAuth } from "../components/AuthContext.tsx";
 import { Save, User, CheckCircle2 } from "lucide-react";
 import { Navigate } from "react-router-dom";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../lib/firebase.ts";
 
 export default function Profile() {
   const { user, appUser, refreshAppUser, loading } = useAuth();
@@ -58,6 +60,22 @@ export default function Profile() {
     setSaved(false);
     try {
       const token = await user.getIdToken();
+      
+      try {
+        await setDoc(doc(db, "users", user.uid), {
+          uid: user.uid,
+          email: user.email || "",
+          name: appUser?.name || user.displayName || "",
+          country: formData.country,
+          grade: formData.grade,
+          interests: formData.interests,
+          goals: formData.goals,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (fsError) {
+        console.error("Failed to sync to Firestore:", fsError);
+      }
+
       const res = await fetch("/api/users/me", {
         method: "POST",
         headers: {

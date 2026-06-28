@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'country']) &&
+             data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.country is string && data.country.size() <= 128 &&
+             (!('grade' in data) || (data.grade is string && data.grade.size() <= 64)) &&
+             (!('interests' in data) || (data.interests is string && data.interests.size() <= 2048)) &&
+             (!('goals' in data) || (data.goals is string && data.goals.size() <= 2048));
+    }
+
+    // 2. User Profiles Collection Hardening
+    match /users/{userId} {
+      // Direct get and lists are restricted strictly to the profile owner
+      allow read: if isOwner(userId);
+      
+      // Creation and updates must start with the validation helper and ensure isOwner
+      allow create: if isOwner(userId) && isValidUserProfile(request.resource.data);
+      
+      allow update: if isOwner(userId) && isValidUserProfile(request.resource.data) && (
+        // Ensure immutable field uid doesn't change
+        request.resource.data.uid == resource.data.uid
+      );
+      
+      // Users cannot delete their profiles
+      allow delete: if false;
+    }
+  }
+}

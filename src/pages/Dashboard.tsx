@@ -5,6 +5,8 @@ import { Bookmark, Target, Sparkles, TrendingUp, Zap, Trophy, MessageSquare, Che
 import Markdown from "react-markdown";
 import { motion, AnimatePresence } from "motion/react";
 
+import { EmptyState } from '../components/EmptyState';
+
 export default function Dashboard() {
   const { user, appUser, loading, refreshAppUser } = useAuth();
   const [bookmarkedOps, setBookmarkedOps] = useState<any[]>([]);
@@ -17,7 +19,7 @@ export default function Dashboard() {
 
   // Onboarding modal state
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [onboardCountry, setOnboardCountry] = useState("United States");
+  const [onboardCountry, setOnboardCountry] = useState("");
   const [onboardGrade, setOnboardGrade] = useState("");
 
   const countries = [
@@ -171,10 +173,13 @@ export default function Dashboard() {
         setBookmarkedOps(bData.map((b: any) => b.opportunity));
       }
       // Personalized recommendations sorted by match score based on user profile
-      const rRes = await fetch("/api/opportunities");
+      const rRes = await fetch("/api/opportunities", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (rRes.ok) {
         const rData = await rRes.json();
-        const sorted = [...rData].sort((a, b) => {
+        const opsArray = rData.results || rData;
+        const sorted = [...opsArray].sort((a, b) => {
           const scoreA = getMatchScore(a, appUser);
           const scoreB = getMatchScore(b, appUser);
           return scoreB - scoreA;
@@ -234,12 +239,12 @@ export default function Dashboard() {
                 <BrainCircuit className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h3 className="font-bold text-white leading-tight">TeenLaunch AI Coach</h3>
-                <p className="text-xs font-medium text-indigo-400">Always-available Strategic Mentor</p>
+                <h3 className="font-bold text-white leading-tight">Student Digital Twin AI</h3>
+                <p className="text-xs font-medium text-indigo-400">High-Intelligence Persistent Strategist</p>
               </div>
               <div className="ml-auto flex gap-2">
                 <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Online
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Gemini High Thinking
                 </span>
               </div>
             </div>
@@ -295,37 +300,34 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Elite Challenges */}
+          {/* Saved Opportunities */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Flame className="h-5 w-5 text-rose-500 fill-rose-500" /> Elite Weekly Challenges
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex flex-col justify-between">
-                <div>
-                  <div className="text-xs font-bold text-rose-600 uppercase tracking-widest mb-1">Challenge</div>
-                  <h4 className="font-bold text-slate-900 text-sm mb-2">Submit 1 Scholarship</h4>
-                  <p className="text-xs text-slate-600 mb-4">Find and submit a scholarship application before Sunday.</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-rose-600">+100 XP</span>
-                  <button className="text-xs font-bold bg-white text-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50">Accept</button>
-                </div>
-              </div>
-              <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex flex-col justify-between">
-                <div>
-                  <div className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Challenge</div>
-                  <h4 className="font-bold text-slate-900 text-sm mb-2">Volunteer 5 Hours</h4>
-                  <p className="text-xs text-slate-600 mb-4">Complete 5 hours of community service this week.</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-amber-600">+50 XP</span>
-                  <div className="w-full max-w-[100px] h-2 bg-amber-200 rounded-full overflow-hidden ml-2">
-                    <div className="h-full bg-amber-500 w-3/5 rounded-full"></div>
-                  </div>
-                </div>
-              </div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                <Bookmark className="h-5 w-5 text-indigo-500 fill-indigo-500" /> Saved Opportunities
+              </h3>
+              <Link to="/opportunities" className="text-xs font-bold text-indigo-600 hover:text-indigo-800">Browse All</Link>
             </div>
+            
+            {bookmarkedOps.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {bookmarkedOps.slice(0, 2).map(op => (
+                  <Link key={op.id} to={`/opportunities/${op.id}`} className="block border border-slate-200 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
+                     <h4 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1">{op.title}</h4>
+                     <p className="text-xs text-slate-500 line-clamp-1 mb-3">{op.organization}</p>
+                     <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100">View Details</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyState 
+                variant="compact"
+                icon={Bookmark}
+                title="No saved opportunities"
+                description="Opportunities you bookmark will appear here for easy access."
+                action={<Link to="/opportunities" className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">Scout Opportunities <ChevronRight className="h-3 w-3" /></Link>}
+              />
+            )}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -359,36 +361,20 @@ export default function Dashboard() {
           
           {/* National Leaderboard snippet */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
                 <Trophy className="h-5 w-5 text-amber-500" /> National Rank
               </h3>
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">Top 5%</span>
+              <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">Unranked</span>
             </div>
             
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                <div className="w-6 font-bold text-slate-400 text-sm text-center">1</div>
-                <div className="w-8 h-8 rounded-full bg-slate-200 shrink-0"></div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-slate-900 truncate">Sarah J.</div>
-                  <div className="text-xs text-slate-500">14,200 XP</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-2 rounded-lg bg-indigo-50 border border-indigo-100">
-                <div className="w-6 font-bold text-indigo-600 text-sm text-center">42</div>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                  {appUser?.name?.charAt(0) || "U"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-slate-900 truncate">You</div>
-                  <div className="text-xs text-indigo-600 font-medium">1,250 XP</div>
-                </div>
-              </div>
-            </div>
-            <button className="w-full mt-4 text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center justify-center gap-1">
-              View Full Leaderboard <ChevronRight className="h-3 w-3" />
-            </button>
+            <EmptyState 
+              variant="compact"
+              icon={Trophy}
+              title="No ranking yet"
+              description="Complete challenges and save opportunities to earn XP and join the leaderboard."
+              action={<Link to="/leaderboard" className="text-xs font-bold text-indigo-600 hover:text-indigo-800">View Leaderboard &rarr;</Link>}
+            />
           </div>
 
           {/* Recommended Opportunities Panel */}
@@ -446,9 +432,13 @@ export default function Dashboard() {
                   );
                 })
               ) : (
-                <div className="text-center py-6 text-xs text-slate-400">
-                  No direct recommendations found. Complete your profile for better suggestions!
-                </div>
+                <EmptyState 
+                  variant="compact"
+                  icon={Sparkles}
+                  title="No recommendations"
+                  description="Complete your profile to get personalized AI suggestions."
+                  action={<Link to="/academic-profile" className="text-xs font-bold text-indigo-600 hover:text-indigo-800">Update Profile &rarr;</Link>}
+                />
               )}
             </div>
           </div>

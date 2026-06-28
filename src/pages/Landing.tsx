@@ -9,43 +9,50 @@ export default function Landing() {
   return (
     <div className="flex flex-col items-center w-full min-h-screen bg-slate-50">
       {/* Premium Navbar Header */}
-      <header className="w-full max-w-6xl mx-auto flex items-center justify-between py-6 px-6 border-b border-slate-200/50">
-        <Link to="/">
-          <Logo variant="light" size="md" />
-        </Link>
-        <div className="flex items-center gap-6">
-          <Link to="/opportunities" className="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-indigo-600 transition-colors">
-            Explore Opportunities
+      <header className="w-full bg-slate-950 border-b border-slate-900 sticky top-0 z-50 shadow-xl shadow-slate-950/10">
+        <div className="max-w-6xl mx-auto flex items-center justify-between py-5 px-6">
+          <Link to="/">
+            <Logo variant="dark" className="h-10 w-auto" />
           </Link>
-          {!user ? (
-            <button
-              onClick={() => signIn()}
-              className="inline-flex h-9 items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-black text-white px-5 transition-all shadow-md shadow-indigo-600/10 hover:scale-[1.02]"
-            >
-              Log In / Register
-            </button>
-          ) : (
-            <Link
-              to="/dashboard"
-              className="inline-flex h-9 items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-black text-white px-5 transition-all shadow-md shadow-indigo-600/10 hover:scale-[1.02]"
-            >
-              Go to Dashboard
+          <div className="flex items-center gap-6">
+            <Link to="/opportunities" className="text-xs font-extrabold uppercase tracking-wider text-slate-400 hover:text-white transition-colors">
+              Explore Opportunities
             </Link>
-          )}
+            {!user ? (
+              <button
+                onClick={() => signIn()}
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-black text-white px-5 transition-all shadow-md shadow-indigo-600/10 hover:scale-[1.02]"
+              >
+                Log In / Register
+              </button>
+            ) : (
+              <Link
+                to="/dashboard"
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-black text-white px-5 transition-all shadow-md shadow-indigo-600/10 hover:scale-[1.02]"
+              >
+                Go to Dashboard
+              </Link>
+            )}
+          </div>
         </div>
       </header>
       {/* Hero Section */}
-      <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48 flex flex-col items-center text-center">
+      <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48 flex flex-col items-center text-center px-4">
+        <Logo variant="light" className="h-16 w-auto mb-10" />
+        
         <div className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-800 mb-8 shadow-sm shadow-indigo-100">
           <Sparkles className="mr-2 h-4 w-4" />
           <span className="uppercase tracking-widest text-[10px] font-black">Launch Your Future</span>
         </div>
         <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl mb-6 max-w-4xl text-slate-900">
-          Find opportunities tailored to your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">ambition.</span>
+          The Definitive <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Student Success</span> Operating System.
         </h1>
-        <p className="mx-auto max-w-[700px] text-lg text-slate-600 md:text-xl leading-relaxed mb-10">
-          Discover scholarships, internships, competitions, and programs designed for high school students looking to strengthen their future.
+        <p className="mx-auto max-w-[800px] text-lg text-slate-600 md:text-xl leading-relaxed mb-6">
+          Discover opportunities, build achievements, connect with mentors, and plan your future. TeenLaunch is the all-in-one platform for ambitious high school students.
         </p>
+        <div className="flex items-center justify-center gap-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-full mb-10 shadow-sm">
+           <Trophy className="h-4 w-4" /> TeenLaunch students have earned over $12.5 Million in scholarships
+        </div>
         <div className="flex flex-col sm:flex-row gap-4">
           {!user ? (
             <button

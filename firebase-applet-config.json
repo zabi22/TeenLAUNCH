@@ -3,6 +3,7 @@
   "appId": "1:1027915118717:web:a67a84db33d6bf88141914",
   "apiKey": "AIzaSyD6YCfWjquNwRr-oSDPMqydPaIKK3EL3qo",
   "authDomain": "conductive-setting-r8gvj.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-teenlaunch-86952bfa-ce13-4d27-ba70-6cf76202df8a",
   "storageBucket": "conductive-setting-r8gvj.firebasestorage.app",
   "messagingSenderId": "1027915118717",
   "measurementId": ""

@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile details containing country and educational preferences",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique firebase Auth UID of the user"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address"
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's display name"
+        },
+        "country": {
+          "type": "string",
+          "description": "The user's chosen country of residence"
+        },
+        "grade": {
+          "type": "string",
+          "description": "The user's educational grade level"
+        },
+        "interests": {
+          "type": "string",
+          "description": "Comma-separated or JSON list of academic/extracurricular interests"
+        },
+        "goals": {
+          "type": "string",
+          "description": "The user's career/academic goals"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the profile was last modified"
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "country"
+      ]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "A collection containing student user profiles with their selected country and grade"
+    }
+  }
+}
