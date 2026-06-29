@@ -3,6 +3,7 @@ import { useAuth } from "../components/AuthContext.tsx";
 import { Search, Percent, Target, BookOpen, AlertCircle, ArrowUpRight, Plus, X } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { cn } from "../lib/utils.ts";
+import { Skeleton } from "../components/ui/Skeleton";
 
 const COLLEGES = [
   { name: "Harvard University", type: "Reach", baseReq: { gpa: 3.9, sat: 1540 }, tags: ["Ivy League", "Highly Selective"] },
@@ -99,7 +100,13 @@ export default function CollegeAnalyzer() {
     setSelectedColleges(prev => prev.filter(c => c.name !== name));
   };
 
-  if (loading) return <div className="p-8 text-center animate-pulse">Loading...</div>;
+  if (loading) return (
+    <div className="p-8 space-y-4">
+      <Skeleton className="h-12 w-full" />
+      <Skeleton className="h-64 w-full" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
   if (!user) return <Navigate to="/" />;
 
   const filteredColleges = COLLEGES.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) && !selectedColleges.find(sc => sc.name === c.name));

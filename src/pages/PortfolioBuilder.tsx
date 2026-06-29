@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { FolderHeart, CheckCircle, Sparkles, Sliders, Eye, Copy, Globe, RefreshCw, ChevronRight } from "lucide-react";
+import ResumeBuilderPanel from "../components/ResumeBuilderPanel.tsx";
 
 export default function PortfolioBuilder() {
   const [includeGpa, setIncludeGpa] = useState(true);
@@ -145,6 +146,8 @@ export default function PortfolioBuilder() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          <ResumeBuilderPanel />
         </div>
 
         {/* Live Mockup Preview */}

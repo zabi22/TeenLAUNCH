@@ -15,6 +15,13 @@
       "when": 1782734419518,
       "tag": "0001_graceful_ulik",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782757003069,
+      "tag": "0002_skinny_queen_noir",
+      "breakpoints": true
     }
   ]
 }

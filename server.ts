@@ -17,8 +17,34 @@ import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
 import { db, pool } from "./src/db/index.ts";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { adminDb, adminAuth } from "./src/lib/firebase-admin.ts";
-import { opportunities, bookmarks, users, academicProfiles, applications, activities, posts, postReactions, postComments, connections, notifications, verificationRequests, messages } from "./src/db/schema.ts";
+import { 
+  users, documents, portfolioItems, agentTasks, drafts, admissionsModels, 
+  notificationPreferences, connections, academicProfiles, activities, posts, 
+  verificationRequests, notifications, opportunities, applications, bookmarks, 
+  postReactions, postComments, appMessages as messages 
+} from "./src/db/schema.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
+import { executeAgentTask, saveDraft } from "./src/lib/agents.ts";
+import { calculateAdmissionProbability } from "./src/lib/admissions.ts";
+import { sendNotification } from "./src/lib/notifications.ts";
+import { generateResume } from "./src/lib/pdfGenerator.ts";
+import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
+import multer from 'multer';
+import "./src/worker.ts";
+
+const upload = multer({ dest: 'uploads/' });
+const redisUrl = process.env.REDIS_URL;
+let redis: IORedis | null = null;
+let documentQueue: Queue | null = null;
+
+if (redisUrl) {
+  redis = new IORedis(redisUrl);
+  redis.on('error', (err) => console.error('Redis Client Error', err));
+  documentQueue = new Queue('document-parsing', { connection: redis as any });
+} else {
+  console.warn('REDIS_URL not set. Redis/BullMQ functionality will be disabled.');
+}
 import { eq, desc, and, lt, or, sql } from "drizzle-orm";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { aiProviderManager, AIHistoryMessage, AIGenerateOptions } from "./src/lib/AIProviderManager.ts";
@@ -437,7 +463,10 @@ async function ensureMigrationHistory() {
     if (academicProfilesExist) {
       console.log("Database tables (e.g., academic_profiles) already exist. Ensuring __drizzle_migrations is synchronized...");
       
-      // 1. Create __drizzle_migrations table if not exists
+      // Ensure "drizzle" schema exists
+      await pool.query('CREATE SCHEMA IF NOT EXISTS "drizzle";');
+
+      // 1. Create __drizzle_migrations tables if not exist
       await pool.query(`
         CREATE TABLE IF NOT EXISTS "public"."__drizzle_migrations" (
           id SERIAL PRIMARY KEY,
@@ -445,9 +474,16 @@ async function ensureMigrationHistory() {
           created_at bigint
         );
       `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
+          id SERIAL PRIMARY KEY,
+          hash text NOT NULL,
+          created_at bigint
+        );
+      `);
 
-      // 2. Compute hashes and insert for 0000 and 0001
-      const migrationFiles = ["0000_minor_kree.sql", "0001_graceful_ulik.sql"];
+      // 2. Compute hashes and insert for 0000, 0001, 0002
+      const migrationFiles = ["0000_minor_kree.sql", "0001_graceful_ulik.sql", "0002_skinny_queen_noir.sql"];
       const drizzleDir = path.join(process.cwd(), "drizzle");
 
       for (const fileName of migrationFiles) {
@@ -456,20 +492,30 @@ async function ensureMigrationHistory() {
           const fileContent = fs.readFileSync(filePath, "utf8");
           const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
 
-          // Check if this hash is already in the table
-          const hashCheck = await pool.query(
+          // Pre-populate public.__drizzle_migrations
+          const publicCheck = await pool.query(
             'SELECT 1 FROM "public"."__drizzle_migrations" WHERE hash = $1',
             [hash]
           );
-
-          if (hashCheck.rowCount === 0) {
-            console.log(`Pre-populating migration entry for ${fileName}...`);
+          if (publicCheck.rowCount === 0) {
+            console.log(`Pre-populating public migration entry for ${fileName}...`);
             await pool.query(
               'INSERT INTO "public"."__drizzle_migrations" (hash, created_at) VALUES ($1, $2)',
               [hash, Date.now()]
             );
-          } else {
-            console.log(`Migration entry for ${fileName} already present in __drizzle_migrations.`);
+          }
+
+          // Pre-populate drizzle.__drizzle_migrations
+          const drizzleCheck = await pool.query(
+            'SELECT 1 FROM "drizzle"."__drizzle_migrations" WHERE hash = $1',
+            [hash]
+          );
+          if (drizzleCheck.rowCount === 0) {
+            console.log(`Pre-populating drizzle migration entry for ${fileName}...`);
+            await pool.query(
+              'INSERT INTO "drizzle"."__drizzle_migrations" (hash, created_at) VALUES ($1, $2)',
+              [hash, Date.now()]
+            );
           }
         } else {
           console.warn(`Warning: Expected migration file ${fileName} was not found at ${filePath}`);
@@ -927,7 +973,48 @@ async function startServer() {
     }
   });
 
-  // AI-Powered Opportunity Aggregator / Discovery
+  // Agentic Tasks
+  app.post("/api/agents/execute", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized' });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'User not found' });
+      
+      const { type, payload } = req.body;
+      const task = await executeAgentTask(userRecords[0].id, type, payload);
+      res.json(task);
+    } catch (error: any) {
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Error executing agent task' });
+    }
+  });
+
+  app.get("/api/agents/tasks", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized' });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'User not found' });
+      
+      const tasks = await db.select().from(agentTasks).where(eq(agentTasks.userId, userRecords[0].id));
+      res.json(tasks);
+    } catch (error: any) {
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Error fetching agent tasks' });
+    }
+  });
+
+  // Admissions Intelligence
+  app.post("/api/admissions/calculate", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized' });
+      
+      const { profile, target } = req.body;
+      const result = await calculateAdmissionProbability(profile, target);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Error calculating admission probability' });
+    }
+  });
+
+    // AI-Powered Opportunity Aggregator / Discovery
   app.post("/api/opportunities/aggregate", requireAuth, async (req: AuthRequest, res) => {
     try {
       const { country, region, city, type } = req.body;
@@ -956,22 +1043,22 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
     "eligibility": "Clear eligibility requirements (e.g. high school seniors, age 15-18)",
     "applicationUrl": "Valid URL to the official website or application page (always starts with http or https)",
     "organization": "Official organization name hosting this opportunity",
-    "isRemote": true or false,
+    "isRemote": true,
     "country": "${targetCountry}",
     "region": "State, province, region or null",
     "city": "City name or null",
     "gradeLevel": "e.g. '10th Grade, 11th Grade' or 'All'",
     "ageRequirement": "e.g. '15+' or '14-18' or null",
-    "isPaid": true or false,
+    "isPaid": true,
     "programLength": "e.g. '6 weeks' or '3 months' or 'Summer'",
     "competitionLevel": "Low, Medium, or High",
-    "acceptanceRate": "integer between 1 and 100 or null",
-    "trustScore": "integer between 70 and 100",
-    "completenessScore": "integer between 70 and 100",
-    "isVerified": true or false,
-    "source": "e.g. 'university_scraper', 'community_submission', 'partner_api'",
-    "collegeValueScore": "integer between 50 and 100",
-    "diversityScore": "integer between 50 and 100 indicating contribution to profile diversity"
+    "acceptanceRate": 50,
+    "trustScore": 80,
+    "completenessScore": 80,
+    "isVerified": true,
+    "source": "university_scraper",
+    "collegeValueScore": 80,
+    "diversityScore": 80
   }
 ]`;
 
@@ -1056,6 +1143,163 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
       res.json(result[0]);
     } catch (error: any) {
       res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
+    }
+  });
+
+  // ==========================================
+  // PILLAR 4: DOCUMENT INTELLIGENCE & PORTFOLIO AUTOMATION
+  // ==========================================
+
+  // List all uploaded documents for the authenticated user
+  app.get("/api/documents", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized' });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'User not found' });
+
+      const list = await db.select().from(documents)
+        .where(eq(documents.userId, userRecords[0].id))
+        .orderBy(desc(documents.uploadedAt));
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Failed to fetch documents' });
+    }
+  });
+
+  // Get status of a specific document
+  app.get("/api/documents/:id/status", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized' });
+      const id = parseInt(req.params.id);
+      const doc = await db.select().from(documents).where(eq(documents.id, id)).then(r => r[0]);
+      if (!doc) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'Document not found' });
+      
+      res.json({
+        id: doc.id,
+        verificationStatus: doc.verificationStatus,
+        parsedData: doc.parsedData,
+        fileUrl: doc.fileUrl,
+        type: doc.type,
+        uploadedAt: doc.uploadedAt
+      });
+    } catch (error: any) {
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Failed to fetch document status' });
+    }
+  });
+
+  // Accept a multipart upload and save metadata immediately
+  app.post("/api/documents/upload", requireAuth, upload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.user || !req.file) return res.status(400).json({ error_code: 'BAD_REQUEST', user_friendly_message: 'File and authentication are required' });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'User not found' });
+      
+      const doc = await db.insert(documents).values({
+        userId: userRecords[0].id,
+        fileUrl: req.file.path,
+        type: req.body.type || 'certificate',
+        verificationStatus: 'pending'
+      }).returning();
+      
+      // Return 200 immediately to the user without waiting for parsing
+      res.json(doc[0]);
+    } catch (error: any) {
+      console.error("Document upload failed:", error);
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Upload failed' });
+    }
+  });
+
+  // Queue a background parsing/verification job via BullMQ
+  app.post("/api/documents/:id/parse", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized' });
+      const id = parseInt(req.params.id);
+      
+      if (!documentQueue) {
+        return res.status(503).json({ 
+          error_code: 'SERVICE_UNAVAILABLE', 
+          user_friendly_message: 'AI verification queue is temporarily unavailable. Your document is safe and will be processed soon.' 
+        });
+      }
+
+      await documentQueue.add('parse', { documentId: id, attemptCount: 1 });
+      res.json({ success: true, message: 'Successfully queued for background verification' });
+    } catch (error: any) {
+      console.error("Queuing document parse job failed:", error);
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Queuing verification failed' });
+    }
+  });
+
+  // One-click resume generator with on-the-fly PDF creation and optional daily-capped AI enhancements
+  app.post("/api/portfolio/generate-resume", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized' });
+      const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'User not found' });
+      
+      const items = await db.select().from(portfolioItems).where(eq(portfolioItems.userId, userRecords[0].id));
+      
+      let itemsToUse = items;
+      const enhance = req.query.enhance === 'true';
+      if (enhance) {
+        const enhanceCountKey = `user_enhance_count:${userRecords[0].id}`;
+        let count = 0;
+        if (redis) {
+          const countStr = await redis.get(enhanceCountKey);
+          count = countStr ? parseInt(countStr, 10) : 0;
+        }
+        if (count >= 3) {
+          return res.status(429).json({ error_code: 'QUOTA_EXCEEDED', user_friendly_message: 'You have reached the daily limit of 3 AI enhancements.' });
+        }
+        
+        // Rewrite descriptions using gemini-3.5-flash
+        itemsToUse = await Promise.all(items.map(async (item) => {
+          try {
+            const systemInstruction = `You are an elite, world-class executive resume writer and career consultant.
+Your job is to rewrite the student's achievement to sound exceptionally professional, highly impact-oriented, metrics-driven, and clear.
+Remove any weak verbs, elevate the vocabulary, and maximize the punchiness.
+Return ONLY a valid JSON object matching the following structure exactly, with NO markdown code blocks, NO backticks, and NO trailing commas:
+{
+  "title": "A highly professional elevated title for the portfolio item",
+  "description": "The revised impact-oriented bulleted description (1-2 sentences)"
+}`;
+            const prompt = `Elevate this achievement description for an elite resume:\nTitle: ${item.title}\nDescription: ${item.description}`;
+            const responseText = await aiProviderManager.generateContent({
+              systemInstruction,
+              prompt,
+              isJson: true,
+              isComplex: false
+            });
+            let cleaned = responseText.trim();
+            if (cleaned.startsWith("```")) {
+              cleaned = cleaned.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+            }
+            const enhanced = JSON.parse(cleaned);
+            return {
+              ...item,
+              title: enhanced.title || item.title,
+              description: enhanced.description || item.description
+            };
+          } catch (e) {
+            console.error("AI enhancement failed for portfolio item ID:", item.id, e);
+            return item;
+          }
+        }));
+        
+        if (redis) {
+          await redis.incr(enhanceCountKey);
+          await redis.expire(enhanceCountKey, 86400); // 1-day expiration TTL
+        }
+      }
+
+      const resumeStream = generateResume({ name: userRecords[0].name || "Scholar Portfolio", email: userRecords[0].email, items: itemsToUse });
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=scholar_resume.pdf');
+      resumeStream.pipe(res);
+    } catch (error: any) {
+      console.error("Resume generation error:", error);
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Failed to generate professional resume PDF' });
     }
   });
 

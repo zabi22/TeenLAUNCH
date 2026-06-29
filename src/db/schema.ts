@@ -19,6 +19,9 @@ export const users = pgTable('users', {
   username: text('username'),
   age: integer('age'),
   onboardingComplete: boolean('onboarding_complete').default(false),
+  subscriptionTier: text('subscription_tier').default('free'),
+  subscriptionExpiresAt: timestamp('subscription_expires_at'),
+  totalXp: integer('total_xp').default(0),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -199,7 +202,128 @@ export const messages = pgTable('messages', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const messagesRelations = relations(messages, ({ one }) => ({
-  sender: one(users, { fields: [messages.senderId], references: [users.id] }),
-  receiver: one(users, { fields: [messages.receiverId], references: [users.id] }),
-}));
+export const agentTasks = pgTable('agent_tasks', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  type: text('type').notNull(),
+  status: text('status').notNull().default('pending'),
+  payload: jsonb('payload'),
+  result: jsonb('result'),
+  createdAt: timestamp('created_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+});
+
+export const drafts = pgTable('drafts', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  opportunityId: integer('opportunity_id').references(() => opportunities.id),
+  type: text('type').notNull(),
+  content: text('content').notNull(),
+  aiModelUsed: text('ai_model_used'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const admissionsModels = pgTable('admissions_models', {
+  id: serial('id').primaryKey(),
+  universityName: text('university_name').notNull(),
+  program: text('program').notNull(),
+  acceptedGpaAvg: real('accepted_gpa_avg'),
+  acceptedSatAvg: integer('accepted_sat_avg'),
+  extracurricularWeight: real('extracurricular_weight'),
+  historicalVolume: integer('historical_volume'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const systemNotifications = pgTable('system_notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  channel: text('channel').notNull(),
+  read: boolean('read').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const notificationPreferences = pgTable('notification_preferences', {
+  userId: integer('user_id').references(() => users.id).primaryKey(),
+  emailEnabled: boolean('email_enabled').default(true),
+  pushEnabled: boolean('push_enabled').default(true),
+  digestFrequency: text('digest_frequency').default('daily'),
+  quietHoursStart: integer('quiet_hours_start'),
+  quietHoursEnd: integer('quiet_hours_end'),
+});
+
+// Social Graph (Pillar 3)
+export const appMessages = pgTable('messages', {
+  id: serial('id').primaryKey(),
+  senderId: integer('sender_id').references(() => users.id).notNull(),
+  receiverId: integer('receiver_id').references(() => users.id),
+  roomId: integer('room_id'),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  readAt: timestamp('read_at'),
+});
+
+export const studyRooms = pgTable('study_rooms', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  topic: text('topic'),
+  createdBy: integer('created_by').references(() => users.id).notNull(),
+  maxMembers: integer('max_members').default(10),
+  isPrivate: boolean('is_private').default(false),
+});
+
+export const roomMembers = pgTable('room_members', {
+  roomId: integer('room_id').references(() => studyRooms.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  joinedAt: timestamp('joined_at').defaultNow(),
+});
+
+export const mentorshipRequests = pgTable('mentorship_requests', {
+  id: serial('id').primaryKey(),
+  menteeId: integer('mentee_id').references(() => users.id).notNull(),
+  mentorId: integer('mentor_id').references(() => users.id).notNull(),
+  status: text('status').default('pending'),
+  topic: text('topic'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Document Intelligence (Pillar 4)
+export const documents = pgTable('documents', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  fileUrl: text('file_url').notNull(),
+  type: text('type').notNull(),
+  parsedData: jsonb('parsed_data'),
+  verificationStatus: text('verification_status').default('pending'),
+  uploadedAt: timestamp('uploaded_at').defaultNow(),
+});
+
+export const portfolioItems = pgTable('portfolio_items', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  category: text('category'),
+  proofDocumentId: integer('proof_document_id').references(() => documents.id),
+  verified: boolean('verified').default(false),
+  xpAwarded: integer('xp_awarded').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Monetization (Pillar 6)
+export const schools = pgTable('schools', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  domain: text('domain').notNull(),
+  adminId: integer('admin_id').references(() => users.id).notNull(),
+  brandingColors: jsonb('branding_colors'),
+  subscriptionStatus: text('subscription_status').default('active'),
+});
+
+export const schoolStudents = pgTable('school_students', {
+  schoolId: integer('school_id').references(() => schools.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  enrolledAt: timestamp('enrolled_at').defaultNow(),
+});

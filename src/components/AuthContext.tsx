@@ -19,6 +19,7 @@ interface AppUser {
   verificationBadges?: string;
   username?: string;
   age?: number;
+  totalXp?: number;
   onboardingComplete?: boolean;
 }
 
