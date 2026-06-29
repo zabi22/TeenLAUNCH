@@ -5,6 +5,7 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./components/AuthContext.tsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import Layout from "./components/Layout.tsx";
 import Landing from "./pages/Landing.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
@@ -37,10 +38,11 @@ import Messages from "./pages/Messages.tsx";
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Layout />}>
             <Route index element={<Landing />} />
             <Route path="twin" element={<DigitalTwin />} />
             <Route path="portfolio" element={<PortfolioBuilder />} />
@@ -70,8 +72,9 @@ export default function App() {
             <Route path="counselor" element={<CounselorDashboard />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

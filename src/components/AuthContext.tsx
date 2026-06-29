@@ -23,6 +23,7 @@ interface AuthContextType {
   user: User | null;
   appUser: AppUser | null;
   loading: boolean;
+  isOfflineMode: boolean;
   signIn: () => Promise<void>;
   logOut: () => Promise<void>;
   refreshAppUser: () => Promise<void>;
@@ -34,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   const fetchAppUser = async (firebaseUser: User, retries = 5, delay = 1000): Promise<void> => {
     try {
@@ -60,6 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         setAppUser(data);
+        setIsOfflineMode(false);
+        // Cache user data for offline resilience
+        localStorage.setItem("cached_app_user", JSON.stringify(data));
       } else {
         throw new Error(`Fetch user details returned status: ${response.status}`);
       }
@@ -69,19 +74,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         return fetchAppUser(firebaseUser, retries - 1, delay * 1.5);
       }
-      console.error("All retries exhausted. Setting a temporary local fallback profile to keep the UI interactive:", err);
-      // Fallback local mock to prevent UI crash in extreme conditions
-      setAppUser({
-        id: 123,
-        uid: firebaseUser.uid,
-        email: firebaseUser.email || "user@teenlaunch.com",
-        name: firebaseUser.displayName || "Alex Johnson",
-        grade: "11th Grade",
-        interests: "STEM, Entrepreneurship",
-        goals: "Founding a non-profit, Ivy League",
-        country: "United States",
-        avatarUrl: firebaseUser.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop"
-      });
+      console.error("All retries exhausted. Switching to degraded Read-Only mode.", err);
+      
+      // Load from cache if available
+      const cached = localStorage.getItem("cached_app_user");
+      if (cached) {
+        try {
+          setAppUser(JSON.parse(cached));
+          setIsOfflineMode(true);
+        } catch (e) {
+          // parse error
+        }
+      } else {
+        // Fallback local mock to prevent UI crash in extreme conditions
+        setAppUser({
+          id: 123,
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || "user@teenlaunch.com",
+          name: firebaseUser.displayName || "Alex Johnson",
+          grade: "11th Grade",
+          interests: "STEM, Entrepreneurship",
+          goals: "Founding a non-profit, Ivy League",
+          country: "United States",
+          avatarUrl: firebaseUser.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop"
+        });
+        setIsOfflineMode(true);
+      }
     }
   };
 
@@ -153,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, appUser, loading, signIn, logOut, refreshAppUser }}>
+    <AuthContext.Provider value={{ user, appUser, loading, isOfflineMode, signIn, logOut, refreshAppUser }}>
       {children}
     </AuthContext.Provider>
   );

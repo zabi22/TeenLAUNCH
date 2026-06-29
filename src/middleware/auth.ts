@@ -13,7 +13,7 @@ export const requireAuth = async (
 ): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Unauthorized: Missing token' });
+    res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized: Missing token' });
     return;
   }
 
@@ -42,7 +42,7 @@ export const requireAuth = async (
     next();
   } catch (error: any) {
     console.error(`[Auth Error] Failed to verify Firebase ID token: ${error.message} (Code: ${error.code})`);
-    res.status(401).json({ error: 'Unauthorized: Invalid token', code: error.code });
+    res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'Unauthorized: Invalid token' });
     return;
   }
 };

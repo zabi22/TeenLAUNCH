@@ -12,7 +12,7 @@ import { cn } from "../lib/utils.ts";
 import Logo from "./Logo.tsx";
 
 export default function Layout() {
-  const { user, signIn, logOut, appUser } = useAuth();
+  const { user, signIn, logOut, appUser, isOfflineMode } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -165,9 +165,18 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
-      <main className="flex-1 h-screen overflow-y-auto bg-slate-50 relative">
+      <main className="flex-1 h-screen overflow-y-auto bg-slate-50 relative flex flex-col">
+        {isOfflineMode && (
+          <div className="w-full bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center justify-center gap-2 z-40 sticky top-0">
+            <Activity className="h-4 w-4 text-amber-600" />
+            <span className="text-sm font-medium text-amber-800">
+              You are currently in Offline / Read-Only Mode. Some features may be unavailable.
+            </span>
+          </div>
+        )}
+        
         {user && (
-          <div className="absolute top-4 right-6 z-10 hidden md:flex items-center gap-3">
+          <div className={`absolute top-4 right-6 z-10 hidden md:flex items-center gap-3 ${isOfflineMode ? 'mt-12' : ''}`}>
             <div className="bg-white border border-slate-200 px-4 py-2 rounded-full flex items-center gap-2 shadow-sm">
               <Zap className="h-4 w-4 text-amber-500 fill-amber-500" />
               <span className="text-sm font-bold text-slate-700">1,250 XP</span>

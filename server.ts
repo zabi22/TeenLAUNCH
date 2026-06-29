@@ -442,6 +442,7 @@ async function startServer() {
   await seedOpportunitiesIfEmpty();
 
   const app = express();
+  app.set("trust proxy", 1);
   const PORT = 3000;
 
   app.use(cors());
@@ -451,10 +452,36 @@ async function startServer() {
         directives: {
           ...helmet.contentSecurityPolicy.getDefaultDirectives(),
           "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-          "connect-src": ["'self'", "blob:", "data:"],
+          "connect-src": [
+            "'self'", 
+            "blob:", 
+            "data:",
+            "https://*.firebaseio.com",
+            "https://*.cloudfunctions.net",
+            "https://*.googleapis.com",
+            "https://securetoken.googleapis.com",
+            "https://identitytoolkit.googleapis.com",
+            "https://firebasestorage.googleapis.com",
+            "https://firestore.googleapis.com"
+          ],
           "worker-src": ["'self'", "blob:", "data:"],
+          "img-src": ["'self'", "blob:", "data:", "https:"],
         },
       },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      frameguard: {
+        action: 'sameorigin'
+      },
+      hidePoweredBy: true,
+      noSniff: true,
+      xssFilter: true,
+      referrerPolicy: {
+        policy: 'strict-origin-when-cross-origin'
+      }
     })
   );
   app.use(express.json());
@@ -463,7 +490,7 @@ async function startServer() {
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 200, // Limit each IP to 200 requests per `window` (here, per 15 minutes)
-    message: { error: "Too many requests from this IP, please try again after 15 minutes" },
+    message: { error_code: 'TOO_MANY_REQUESTS', user_friendly_message: 'Too many requests from this IP, please try again after 15 minutes.', original_error: 'Rate limit exceeded' },
     standardHeaders: true,
     legacyHeaders: false,
   });
@@ -481,12 +508,12 @@ async function startServer() {
   // Sync user profile from Firebase to Postgres
   app.post("/api/users/sync", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const user = await getOrCreateUser(req.user.uid, req.user.email || "", req.user.name);
       
       res.json(user);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -495,24 +522,24 @@ async function startServer() {
       const studentsList = await db.select().from(users);
       res.json(studentsList);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.get("/api/users/me", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       res.json(userRecords[0]);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.post("/api/users/me", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const { grade, interests, goals, country } = req.body;
       const updatedUser = await db.update(users)
         .set({ grade, interests, goals, country })
@@ -521,31 +548,31 @@ async function startServer() {
 
       res.json(updatedUser[0]);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Academic Profile
   app.get("/api/academic-profile", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       const dbUserId = userRecords[0].id;
       
       const profile = await db.select().from(academicProfiles).where(eq(academicProfiles.userId, dbUserId));
       if (profile.length === 0) return res.json({});
       res.json(profile[0]);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
     }
   });
 
   app.post("/api/academic-profile", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       const dbUserId = userRecords[0].id;
       
       const existing = await db.select().from(academicProfiles).where(eq(academicProfiles.userId, dbUserId));
@@ -562,30 +589,30 @@ async function startServer() {
         res.json(inserted[0]);
       }
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Applications
   app.get("/api/applications", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       const dbUserId = userRecords[0].id;
       
       const userApps = await db.select().from(applications).where(eq(applications.userId, dbUserId));
       res.json(userApps);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.post("/api/applications", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       const dbUserId = userRecords[0].id;
       
       const inserted = await db.insert(applications)
@@ -593,30 +620,30 @@ async function startServer() {
         .returning();
       res.json(inserted[0]);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Activities
   app.get("/api/activities", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       const dbUserId = userRecords[0].id;
       
       const userActivities = await db.select().from(activities).where(eq(activities.userId, dbUserId));
       res.json(userActivities);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.post("/api/activities", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       const dbUserId = userRecords[0].id;
       
       const inserted = await db.insert(activities)
@@ -624,7 +651,7 @@ async function startServer() {
         .returning();
       res.json(inserted[0]);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -749,7 +776,7 @@ async function startServer() {
          has_more: offset + perPage < totalCount
       });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -788,7 +815,7 @@ async function startServer() {
       apiCache.set(cacheKey, result);
       res.json(result);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -852,11 +879,11 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
         discovered = cleanAndParseJson(textResponse);
       } catch (e) {
         console.error("Failed to parse JSON for aggregate:", textResponse);
-        return res.status(500).json({ error: "Failed to parse AI response" });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       if (!Array.isArray(discovered)) {
-        return res.status(500).json({ error: "AI response is not an array" });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       const insertedOps = [];
@@ -909,7 +936,7 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
       res.json({ success: true, count: insertedOps.length, opportunities: insertedOps });
     } catch (error: any) {
       console.error("Aggregation error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -917,10 +944,10 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
     try {
       const id = parseInt(req.params.id);
       const result = await db.select().from(opportunities).where(eq(opportunities.id, id));
-      if (result.length === 0) return res.status(404).json({ error: "Not found" });
+      if (result.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       res.json(result[0]);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -931,7 +958,7 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
       const newOp = await db.insert(opportunities).values(req.body).returning();
       res.json(newOp[0]);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -941,7 +968,7 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
     try {
       const { url, sourceName } = req.body;
       if (!url) {
-        return res.status(400).json({ error: "URL is required" });
+        return res.status(400).json({ error_code: 'BAD_REQUEST', user_friendly_message: 'The request was invalid or missing required parameters.' });
       }
       
       const { Queue } = await import("bullmq");
@@ -956,14 +983,14 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
       
       res.json({ success: true, message: "Crawler job added to queue" });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Generative UI API
   app.get("/api/dashboard/generative-ui", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
 
       const current_user_goal_status = req.query.status || 'Application Week';
       const systemInstruction = `You are a Context-Aware Generative UI Engine.
@@ -999,18 +1026,18 @@ The format must match:
       res.json(parsedConfig);
     } catch (error: any) {
       console.error("Generative UI error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Coach Chat API using Gemini
   app.post("/api/coach/chat", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const { message, history } = req.body;
       
       if (!message) {
-        return res.status(400).json({ error: "Message is required." });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       const systemInstruction = `You are the TeenLaunch Student Digital Twin AI, an ultra-advanced, always-available strategic mentor for a high school student aiming for elite universities and world-class career goals.
@@ -1022,14 +1049,14 @@ Keep your responses concise, highly professional, and structured with clean mark
       res.json({ text: responseText });
     } catch (error: any) {
       console.error("Coach chat error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Bookmarks
   app.get("/api/bookmarks", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
       if (userRecords.length === 0) return res.json([]);
@@ -1045,17 +1072,17 @@ Keep your responses concise, highly professional, and structured with clean mark
 
       res.json(userBookmarks);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.post("/api/bookmarks/:opportunityId", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const opId = parseInt(req.params.opportunityId);
 
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       const dbUserId = userRecords[0].id;
 
       const newBookmark = await db.insert(bookmarks).values({
@@ -1064,17 +1091,17 @@ Keep your responses concise, highly professional, and structured with clean mark
       }).returning();
       res.json(newBookmark[0]);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.delete("/api/bookmarks/:opportunityId", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const opId = parseInt(req.params.opportunityId);
 
       const userRecords = await db.select().from(users).where(eq(users.uid, req.user.uid));
-      if (userRecords.length === 0) return res.status(404).json({ error: "User not found" });
+      if (userRecords.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       const dbUserId = userRecords[0].id;
 
       await db.delete(bookmarks).where(
@@ -1082,18 +1109,18 @@ Keep your responses concise, highly professional, and structured with clean mark
       );
       res.json({ success: true });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Essay Assistant API using Gemini 3.1 Pro Preview with Thinking Mode
   app.post("/api/essay/analyze", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const { prompt, draft } = req.body;
       
       if (!prompt || !draft) {
-        return res.status(400).json({ error: "Prompt and draft are required." });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       const systemInstruction = `You are an elite college admissions essay advisor.
@@ -1120,23 +1147,23 @@ Output MUST be a JSON object with this exact structure:
         parsed = cleanAndParseJson(textResponse);
       } catch (e) {
         console.error("Failed to parse JSON from Gemini:", textResponse);
-        return res.status(500).json({ error: "Failed to parse AI response" });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       res.json(parsed);
     } catch (error: any) {
       console.error("Essay analysis error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.post("/api/essay/brainstorm", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const { prompt } = req.body;
       
       if (!prompt) {
-        return res.status(400).json({ error: "Prompt is required." });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       const systemInstruction = `You are an elite college admissions essay advisor.
@@ -1164,13 +1191,13 @@ Provide 3 highly distinct and creative ideas.`;
         parsed = cleanAndParseJson(textResponse);
       } catch (e) {
         console.error("Failed to parse JSON from Gemini:", textResponse);
-        return res.status(500).json({ error: "Failed to parse AI response" });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       res.json({ ideas: parsed });
     } catch (error: any) {
       console.error("Brainstorm error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -1180,7 +1207,7 @@ Provide 3 highly distinct and creative ideas.`;
     try {
       const { goal, grade, profile } = req.body;
       if (!goal || !grade) {
-        return res.status(400).json({ error: "Goal and grade are required." });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       const systemInstruction = `You are an elite college admissions strategist.
@@ -1231,7 +1258,7 @@ Types should be one of: Extracurricular, Competition, Academics, Service, Projec
         }
       } catch (e) {
         console.error("Failed to parse JSON from AI:", textResponse);
-        return res.status(500).json({ error: "Failed to parse AI response" });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       // Normalize each stage to guarantee exact structures expected by the frontend
@@ -1263,7 +1290,7 @@ Types should be one of: Extracurricular, Competition, Academics, Service, Projec
       res.json({ roadmap: normalizedRoadmap });
     } catch (error: any) {
       console.error("Roadmap generation error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -1272,7 +1299,7 @@ Types should be one of: Extracurricular, Competition, Academics, Service, Projec
     try {
       const { college, major, profile, activities } = req.body;
       if (!college || !profile) {
-        return res.status(400).json({ error: "College and profile are required." });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       const systemInstruction = `You are the TeenLaunch AI Admissions Simulator. You simulate admissions review for top universities.
@@ -1303,13 +1330,13 @@ Return ONLY valid JSON with this structure:
         parsed = cleanAndParseJson(textResponse);
       } catch (e) {
         console.error("Failed to parse JSON from AI:", textResponse);
-        return res.status(500).json({ error: "Failed to parse AI response" });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       res.json(parsed);
     } catch (error: any) {
       console.error("College analysis error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -1327,9 +1354,9 @@ Return ONLY valid JSON with this structure:
   // 1. Fetch Feed (LinkedIn-like prioritizing connections, grade, interests, etc.)
   app.get("/api/social/posts", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       // Fetch all posts with their creators
       const allPosts = await db.select().from(posts);
@@ -1427,19 +1454,19 @@ Return ONLY valid JSON with this structure:
       res.json(scoredPosts.map(sp => sp.post));
     } catch (err: any) {
       console.error("Error fetching feed:", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 2. Create Post
   app.post("/api/social/posts", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const { content, imageUrl, achievementBadge, link, tags, category, isFounderUpdate } = req.body;
-      if (!content) return res.status(400).json({ error: "Content is required" });
+      if (!content) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const result = await db.insert(posts).values({
         userId: currentUser.id,
@@ -1454,24 +1481,24 @@ Return ONLY valid JSON with this structure:
 
       res.json(result[0]);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 3. React to Post (like, celebrate, inspire, support)
   app.post("/api/social/posts/:id/react", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const postId = parseInt(req.params.id);
       const { type } = req.body; // 'like', 'celebrate', 'inspire', 'support'
-      if (!type) return res.status(400).json({ error: "Reaction type is required" });
+      if (!type) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       // Check if post exists
       const postRecord = await db.select().from(posts).where(eq(posts.id, postId));
-      if (postRecord.length === 0) return res.status(404).json({ error: "Post not found" });
+      if (postRecord.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
 
       // Check existing reaction by user on this post
       const existing = await db.select().from(postReactions).where(
@@ -1509,23 +1536,23 @@ Return ONLY valid JSON with this structure:
 
       res.json(result[0]);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 4. Comment on Post
   app.post("/api/social/posts/:id/comments", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const postId = parseInt(req.params.id);
       const { content, parentId } = req.body;
-      if (!content) return res.status(400).json({ error: "Comment content is required" });
+      if (!content) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const postRecord = await db.select().from(posts).where(eq(posts.id, postId));
-      if (postRecord.length === 0) return res.status(404).json({ error: "Post not found" });
+      if (postRecord.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
 
       const result = await db.insert(postComments).values({
         postId,
@@ -1550,7 +1577,7 @@ Return ONLY valid JSON with this structure:
         user: currentUser
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -1570,21 +1597,21 @@ Return ONLY valid JSON with this structure:
 
       res.json(commentsWithUsers);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 6. Connect / Follow Action
   app.post("/api/social/connect", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const { receiverId, type } = req.body; // type: 'connection' or 'follow'
-      if (!receiverId || !type) return res.status(400).json({ error: "receiverId and type are required" });
+      if (!receiverId || !type) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
-      if (currentUser.id === receiverId) return res.status(400).json({ error: "Cannot connect to yourself" });
+      if (currentUser.id === receiverId) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       // Check if connection already exists
       const existing = await db.select().from(connections).where(
@@ -1598,7 +1625,7 @@ Return ONLY valid JSON with this structure:
         // If they requested/connected already
         const match = existing.find(c => c.senderId === currentUser.id && c.receiverId === receiverId && c.type === type);
         if (match) return res.json(match); // already sent
-        return res.status(400).json({ error: "An active relationship already exists between you and this student." });
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       }
 
       // Create relation
@@ -1619,19 +1646,19 @@ Return ONLY valid JSON with this structure:
 
       res.json(result[0]);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 7. Accept Connection Request
   app.post("/api/social/connect/accept", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const { senderId } = req.body;
-      if (!senderId) return res.status(400).json({ error: "senderId is required" });
+      if (!senderId) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       // Find pending connection
       const pending = await db.select().from(connections).where(
@@ -1644,7 +1671,7 @@ Return ONLY valid JSON with this structure:
       );
 
       if (pending.length === 0) {
-        return res.status(404).json({ error: "Pending connection request not found" });
+        return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
       }
 
       // Update to accepted
@@ -1661,16 +1688,16 @@ Return ONLY valid JSON with this structure:
 
       res.json(updated[0]);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Analytics Endpoints
   app.get("/api/analytics/impact", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       // Fetch user's applications
       const userApps = await db.select().from(applications).where(eq(applications.userId, currentUser.id));
@@ -1687,16 +1714,16 @@ Return ONLY valid JSON with this structure:
         global: { totalOpportunitiesWon: allApps.length }
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // Messaging Endpoints
   app.get("/api/messages/conversations", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       // Get all unique users we've chatted with
       const sent = await db.select({ partnerId: messages.receiverId }).from(messages).where(eq(messages.senderId, currentUser.id));
@@ -1732,15 +1759,15 @@ Return ONLY valid JSON with this structure:
 
       res.json(conversations.sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime()));
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.get("/api/messages/:userId", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       
       const otherUserId = parseInt(req.params.userId);
 
@@ -1754,19 +1781,19 @@ Return ONLY valid JSON with this structure:
 
       res.json(conversation);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.post("/api/messages/:userId", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
       
       const receiverId = parseInt(req.params.userId);
       const { content } = req.body;
-      if (!content) return res.status(400).json({ error: "Message content is required" });
+      if (!content) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const newMsg = await db.insert(messages).values({
         senderId: currentUser.id,
@@ -1776,16 +1803,16 @@ Return ONLY valid JSON with this structure:
 
       res.json(newMsg[0]);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 8. Connection Counts & Status Details
   app.get("/api/social/connections", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       // Connections: mutual connection type where status = 'accepted'
       const mutual = await db.select().from(connections).where(
@@ -1840,16 +1867,16 @@ Return ONLY valid JSON with this structure:
         incomingRequests: incomingWithUsers,
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 9. Fetch Notifications
   app.get("/api/social/notifications", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const list = await db.select().from(notifications).where(eq(notifications.userId, currentUser.id)).orderBy(desc(notifications.createdAt));
 
@@ -1871,28 +1898,28 @@ Return ONLY valid JSON with this structure:
 
       res.json(enriched);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 10. Mark Notifications as Read
   app.post("/api/social/notifications/read", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, currentUser.id));
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 11. Profile Update
   app.post("/api/social/profile", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const { headline, bio, portfolioUrl, skills, avatarUrl, grade, interests, goals, country } = req.body;
 
       const updated = await db.update(users).set({
@@ -1909,7 +1936,7 @@ Return ONLY valid JSON with this structure:
 
       res.json(updated[0]);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -1918,7 +1945,7 @@ Return ONLY valid JSON with this structure:
     try {
       const targetUserId = parseInt(req.params.userId);
       const userRecord = await db.select().from(users).where(eq(users.id, targetUserId));
-      if (userRecord.length === 0) return res.status(404).json({ error: "Student profile not found" });
+      if (userRecord.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
 
       const profileUser = userRecord[0];
 
@@ -2001,7 +2028,7 @@ Return ONLY valid JSON with this structure:
         connectionState,
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -2065,7 +2092,7 @@ Return ONLY valid JSON with this structure:
 
       res.json(leaderboardEntries);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -2130,19 +2157,19 @@ Return ONLY valid JSON with this structure:
         competitors
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   // 15. Profile Verification Application
   app.post("/api/social/verify", requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
       const currentUser = await getDbUser(req.user.uid);
-      if (!currentUser) return res.status(404).json({ error: "User not found" });
+      if (!currentUser) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const { badgeType, proof } = req.body;
-      if (!badgeType || !proof) return res.status(400).json({ error: "badgeType and proof description are required" });
+      if (!badgeType || !proof) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const result = await db.insert(verificationRequests).values({
         userId: currentUser.id,
@@ -2153,7 +2180,7 @@ Return ONLY valid JSON with this structure:
 
       res.json(result[0]);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -2170,17 +2197,17 @@ Return ONLY valid JSON with this structure:
       }));
       res.json(enriched);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
   app.post("/api/social/verify-approve", requireAuth, async (req: AuthRequest, res) => {
     try {
       const { requestId, status } = req.body; // status = 'approved' or 'rejected'
-      if (!requestId || !status) return res.status(400).json({ error: "requestId and status are required" });
+      if (!requestId || !status) return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
 
       const reqRecord = await db.select().from(verificationRequests).where(eq(verificationRequests.id, requestId));
-      if (reqRecord.length === 0) return res.status(404).json({ error: "Request not found" });
+      if (reqRecord.length === 0) return res.status(404).json({ error_code: 'NOT_FOUND', user_friendly_message: 'The requested resource could not be found.' });
 
       // Update request status
       await db.update(verificationRequests).set({ status }).where(eq(verificationRequests.id, requestId));
@@ -2209,7 +2236,7 @@ Return ONLY valid JSON with this structure:
 
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -2241,7 +2268,7 @@ Return ONLY valid JSON with this structure:
       res.json({ reply });
     } catch (err: any) {
       console.error(err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
@@ -2271,7 +2298,7 @@ Return ONLY valid JSON with this structure:
       const cleaned = response.replace(/```json\n?|\n?```/g, "").trim();
       res.json(JSON.parse(cleaned));
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
     }
   });
 
