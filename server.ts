@@ -1275,6 +1275,7 @@ Types should be one of: Extracurricular, Competition, Academics, Service, Projec
       const textResponse = await generateContentManager(
         systemInstruction,
         `Generate roadmap for: ${goal} starting from ${grade}`,
+        true,
         true
       );
       

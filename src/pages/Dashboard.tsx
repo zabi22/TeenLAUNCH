@@ -1,12 +1,58 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../components/AuthContext.tsx";
 import { Bookmark, Target, Sparkles, TrendingUp, Zap, Trophy, MessageSquare, ChevronRight, Send, Flame, BrainCircuit, Search, PenTool, User as UserIcon, Globe, GraduationCap, Calendar, MapPin } from "lucide-react";
-import Markdown from "react-markdown";
 import { motion, AnimatePresence } from "motion/react";
 
 import { GenerativeUIProvider, GenerativeUIConfig } from "../components/GenerativeUIProvider";
 import { EmptyState } from '../components/EmptyState';
+import { AICoachChat } from "../components/Dashboard/AICoachChat";
+
+const SavedOpItem = memo(function SavedOpItem({ op }: { op: any }) {
+  return (
+    <Link to={`/opportunities/${op.id}`} className="block border border-slate-200 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
+       <h4 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1">{op.title}</h4>
+       <p className="text-xs text-slate-500 line-clamp-1 mb-3">{op.organization}</p>
+       <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100">View Details</span>
+    </Link>
+  );
+});
+
+const RecommendedOpItem = memo(function RecommendedOpItem({ op, score }: { op: any; score: number }) {
+  return (
+    <Link 
+      to={`/opportunities/${op.id}`}
+      className="block p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-all hover:border-indigo-200 group relative"
+    >
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-bold rounded-md">
+          {op.category}
+        </span>
+        <span className="text-[10px] font-black text-indigo-600 shrink-0">
+          {score}% Match
+        </span>
+      </div>
+      
+      <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1 mb-0.5">
+        {op.title}
+      </h4>
+      <p className="text-[10px] text-slate-500 mb-2 line-clamp-1">
+        {op.organization}
+      </p>
+      
+      <div className="flex items-center justify-between text-[9px] text-slate-400 font-medium border-t border-slate-100/60 pt-2">
+        <span className="flex items-center gap-1">
+          <MapPin className="h-2.5 w-2.5 shrink-0" />
+          {op.isRemote ? "Virtual" : (op.location || "Varies")}
+        </span>
+        <span className="flex items-center gap-1">
+          <Calendar className="h-2.5 w-2.5 shrink-0" />
+          {op.deadline ? new Date(op.deadline).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : "Rolling"}
+        </span>
+      </div>
+    </Link>
+  );
+});
 
 export default function Dashboard() {
   const { user, appUser, loading, refreshAppUser } = useAuth();
@@ -14,12 +60,6 @@ export default function Dashboard() {
   const [recommendedOps, setRecommendedOps] = useState<any[]>([]);
   const [uiConfig, setUiConfig] = useState<GenerativeUIConfig | null>(null);
   const [isUiLoading, setIsUiLoading] = useState(false);
-
-  
-  const [chatInput, setChatInput] = useState("");
-  const [isChatLoading, setIsChatLoading] = useState(false);
-  const [chatHistory, setChatHistory] = useState<any[]>([]);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Onboarding modal state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -46,7 +86,7 @@ export default function Dashboard() {
   ];
 
   // Helper to calculate opportunity match score based on user profile
-  const getMatchScore = (op: any, user: any) => {
+  const getMatchScore = useCallback((op: any, user: any) => {
     if (!user) return 70; // baseline
     let score = 70;
     if (op.country && user.country && op.country.toLowerCase() === user.country.toLowerCase()) {
@@ -71,7 +111,17 @@ export default function Dashboard() {
       }
     }
     return Math.min(score, 99);
-  };
+  }, []);
+
+  const sortedRecommendedOps = useMemo(() => {
+    return [...recommendedOps]
+      .sort((a, b) => {
+        const scoreA = getMatchScore(a, appUser);
+        const scoreB = getMatchScore(b, appUser);
+        return scoreB - scoreA;
+      })
+      .slice(0, 3);
+  }, [recommendedOps, appUser, getMatchScore]);
 
   useEffect(() => {
     if (appUser) {
@@ -112,56 +162,6 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (appUser) {
-       setChatHistory([
-        {
-          role: "model",
-          text: `Hi ${appUser.name?.split(' ')[0] || "there"}! I reviewed your **Academic Profile** and **Roadmap** this morning.\n\nYour academics are strong (3.9 GPA), but your **Leadership** category is currently your weakest area for highly selective universities. I found 3 new club leadership opportunities you can apply for this week.\n\nShould we add "Secure Leadership Role" to your immediate action plan?`
-        }
-      ]);
-    }
-  }, [appUser]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
-
-  const handleSendMessage = async () => {
-    if (!chatInput.trim() || isChatLoading) return;
-    
-    const message = chatInput;
-    setChatInput("");
-    
-    const newHistory = [...chatHistory, { role: "user", text: message }];
-    setChatHistory(newHistory);
-    setIsChatLoading(true);
-
-    try {
-      const token = await user?.getIdToken();
-      const res = await fetch("/api/coach/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ message, history: chatHistory })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setChatHistory([...newHistory, { role: "model", text: data.text }]);
-      } else {
-        setChatHistory([...newHistory, { role: "model", text: "I'm sorry, I'm having trouble connecting right now. Please check if your GEMINI_API_KEY is configured." }]);
-      }
-    } catch (err) {
-      console.error(err);
-      setChatHistory([...newHistory, { role: "model", text: "I encountered an error trying to respond. Please try again." }]);
-    } finally {
-      setIsChatLoading(false);
-    }
-  };
-
-  useEffect(() => {
     if (user) {
       fetchDashboardData();
     }
@@ -183,12 +183,7 @@ export default function Dashboard() {
       if (rRes.ok) {
         const rData = await rRes.json();
         const opsArray = rData.results || rData;
-        const sorted = [...opsArray].sort((a, b) => {
-          const scoreA = getMatchScore(a, appUser);
-          const scoreB = getMatchScore(b, appUser);
-          return scoreB - scoreA;
-        });
-        setRecommendedOps(sorted.slice(0, 3));
+        setRecommendedOps(opsArray);
       }
       // Fetch AI Generative UI Config
       setIsUiLoading(true);
@@ -211,29 +206,32 @@ export default function Dashboard() {
     <div className="flex flex-col gap-8 pb-12">
       
       {/* Welcome & XP Status */}
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome back, {appUser?.name?.split(' ')[0] || "Student"}!</h1>
-          <p className="text-slate-500">Ready to level up your future today?</p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-1/3 w-60 h-60 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="relative z-10 space-y-1">
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
+            Welcome back, <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500">{appUser?.name?.split(' ')[0] || "Student"}</span>!
+          </h1>
+          <p className="text-slate-500 text-sm font-medium">Ready to level up your future today?</p>
         </div>
         
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-inner flex flex-col sm:flex-row items-center gap-6 min-w-[320px] relative z-10">
+          <div className="flex items-center gap-3.5 shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20 animate-pulse-slow">
               <Zap className="h-6 w-6 text-white fill-white" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Level 12 • Scholar</div>
-              <div className="text-xl font-black text-slate-900 leading-none">1,250 <span className="text-sm font-semibold text-slate-500">XP</span></div>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Level 12 • Scholar</div>
+              <div className="text-xl font-black text-slate-900 leading-none">1,250 <span className="text-xs font-bold text-slate-500">XP</span></div>
             </div>
           </div>
-          <div className="h-10 w-px bg-slate-200"></div>
-          <div className="w-48">
-            <div className="flex justify-between text-xs font-bold mb-1.5">
-              <span className="text-slate-400">Progress to Lvl 13</span>
-              <span className="text-indigo-600">80%</span>
+          <div className="hidden sm:block h-8 w-px bg-slate-200"></div>
+          <div className="w-full flex-1">
+            <div className="flex justify-between text-[11px] font-bold mb-1.5">
+              <span className="text-slate-400">Next Level</span>
+              <span className="text-indigo-600 font-extrabold">80%</span>
             </div>
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-slate-200/60 rounded-full overflow-hidden border border-slate-200/20">
               <div className="h-full bg-indigo-500 rounded-full w-4/5"></div>
             </div>
           </div>
@@ -253,75 +251,8 @@ export default function Dashboard() {
               </h2>
               <GenerativeUIProvider config={uiConfig} />
             </div>
-          )}
-
-          {/* AI Mentor Centerpiece */}
-          <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-800 bg-slate-800/50 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center">
-                <BrainCircuit className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-white leading-tight">Student Digital Twin AI</h3>
-                <p className="text-xs font-medium text-indigo-400">High-Intelligence Persistent Strategist</p>
-              </div>
-              <div className="ml-auto flex gap-2">
-                <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Gemini High Thinking
-                </span>
-              </div>
-            </div>
-            <div className="p-6 space-y-4 flex-1 overflow-y-auto max-h-[400px] custom-scrollbar">
-              {chatHistory.map((msg, i) => (
-                <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                  <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center ${msg.role === 'model' ? 'bg-indigo-500' : 'bg-slate-700'}`}>
-                    {msg.role === 'model' ? <BrainCircuit className="h-4 w-4 text-white" /> : <UserIcon className="h-4 w-4 text-white" />}
-                  </div>
-                  <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] ${
-                    msg.role === 'model' 
-                      ? 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none' 
-                      : 'bg-indigo-600 text-white rounded-tr-none'
-                  }`}>
-                    <div className="markdown-body text-current [&>*:last-child]:mb-0 [&>*:first-child]:mt-0 prose-sm prose-invert max-w-none">
-                      <Markdown>{msg.text}</Markdown>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {isChatLoading && (
-                <div className="flex gap-4">
-                  <div className="w-8 h-8 rounded-full bg-indigo-500 shrink-0 flex items-center justify-center">
-                    <BrainCircuit className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="bg-slate-800 border border-slate-700 text-slate-200 p-4 rounded-2xl rounded-tl-none text-sm flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
-                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                  </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-            <div className="p-4 bg-slate-800/50 border-t border-slate-800">
-              <div className="relative">
-                <input 
-                  type="text" 
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                  placeholder="Ask your AI mentor for advice..." 
-                  className="w-full bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-sm rounded-xl py-3 pl-4 pr-12 focus:outline-none focus:border-indigo-500" 
-                />
-                <button 
-                  onClick={handleSendMessage}
-                  disabled={isChatLoading || !chatInput.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
+          )}          {/* AI Mentor Centerpiece (extracted to localized optimized component) */}
+          <AICoachChat />
 
           {/* Saved Opportunities */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
@@ -335,11 +266,7 @@ export default function Dashboard() {
             {bookmarkedOps.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {bookmarkedOps.slice(0, 2).map(op => (
-                  <Link key={op.id} to={`/opportunities/${op.id}`} className="block border border-slate-200 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
-                     <h4 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1">{op.title}</h4>
-                     <p className="text-xs text-slate-500 line-clamp-1 mb-3">{op.organization}</p>
-                     <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100">View Details</span>
-                  </Link>
+                  <SavedOpItem key={op.id} op={op} />
                 ))}
               </div>
             ) : (
@@ -415,43 +342,15 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-3">
-              {recommendedOps.length > 0 ? (
-                recommendedOps.map((op) => {
+              {sortedRecommendedOps.length > 0 ? (
+                sortedRecommendedOps.map((op) => {
                   const score = getMatchScore(op, appUser);
-                  
                   return (
-                    <Link 
+                    <RecommendedOpItem 
                       key={op.id} 
-                      to={`/opportunities/${op.id}`}
-                      className="block p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-all hover:border-indigo-200 group relative"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-bold rounded-md">
-                          {op.category}
-                        </span>
-                        <span className="text-[10px] font-black text-indigo-600 shrink-0">
-                          {score}% Match
-                        </span>
-                      </div>
-                      
-                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1 mb-0.5">
-                        {op.title}
-                      </h4>
-                      <p className="text-[10px] text-slate-500 mb-2 line-clamp-1">
-                        {op.organization}
-                      </p>
-                      
-                      <div className="flex items-center justify-between text-[9px] text-slate-400 font-medium border-t border-slate-100/60 pt-2">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-2.5 w-2.5 shrink-0" />
-                          {op.isRemote ? "Virtual" : (op.location || "Varies")}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-2.5 w-2.5 shrink-0" />
-                          {op.deadline ? new Date(op.deadline).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : "Rolling"}
-                        </span>
-                      </div>
-                    </Link>
+                      op={op} 
+                      score={score} 
+                    />
                   );
                 })
               ) : (

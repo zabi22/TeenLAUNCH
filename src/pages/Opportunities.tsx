@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search, MapPin, Calendar, ExternalLink, Bookmark, Filter, Globe, Sparkles, GraduationCap, DollarSign, Clock, Globe2, Loader2 } from "lucide-react";
 import { useAuth } from "../components/AuthContext.tsx";
 import { cn } from "../lib/utils.ts";
 import { EmptyState } from "../components/EmptyState";
+import { OpportunityCard } from "../components/OpportunityCard";
 
 export default function Opportunities() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -90,7 +91,7 @@ export default function Opportunities() {
     }
   };
 
-  const toggleBookmark = async (id: number) => {
+  const toggleBookmark = useCallback(async (id: number) => {
     if (!user) {
       alert("Please sign in to bookmark opportunities.");
       return;
@@ -103,18 +104,18 @@ export default function Opportunities() {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` }
         });
-        setBookmarks(bookmarks.filter(bId => bId !== id));
+        setBookmarks(prev => prev.filter(bId => bId !== id));
       } else {
         await fetch(`/api/bookmarks/${id}`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` }
         });
-        setBookmarks([...bookmarks, id]);
+        setBookmarks(prev => [...prev, id]);
       }
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [user, bookmarks]);
 
   // AI Scout continuous opportunity discovery
   const discoverOpportunitiesWithAI = async (type: string = "mixed") => {
@@ -224,7 +225,7 @@ export default function Opportunities() {
     "Other"
   ];
 
-  const getMatchScore = (op: any, user: any) => {
+  const getMatchScore = useCallback((op: any, user: any) => {
     if (!user) return null;
     let score = 70; // baseline
     if (op.country === user.country) score += 15;
@@ -244,62 +245,66 @@ export default function Opportunities() {
       if (hasInterest) score += 4;
     }
     return Math.min(score, 99);
-  };
+  }, []);
 
-  const filteredOpportunities = opportunities.filter(op => {
-    // 2. Category filter
-    const matchesCategory = categoryFilter === "All" || 
-                            (op.category && op.category.toLowerCase().includes(categoryFilter.toLowerCase().replace("opportunities", "volunteer").replace("programs", "").trim()));
+  const filteredOpportunities = useMemo(() => {
+    return opportunities.filter(op => {
+      // 2. Category filter
+      const matchesCategory = categoryFilter === "All" || 
+                              (op.category && op.category.toLowerCase().includes(categoryFilter.toLowerCase().replace("opportunities", "volunteer").replace("programs", "").trim()));
 
-    // 3. Country filter
-    const matchesCountry = countryFilter === "All" || 
-                           (op.country && op.country.toLowerCase() === countryFilter.toLowerCase());
+      // 3. Country filter
+      const matchesCountry = countryFilter === "All" || 
+                             (op.country && op.country.toLowerCase() === countryFilter.toLowerCase());
 
-    // 4. Grade filter
-    const matchesGrade = gradeFilter === "All" || 
-                         !op.gradeLevel || 
-                         op.gradeLevel.toLowerCase() === "all" || 
-                         op.gradeLevel.toLowerCase().includes(gradeFilter.toLowerCase());
+      // 4. Grade filter
+      const matchesGrade = gradeFilter === "All" || 
+                           !op.gradeLevel || 
+                           op.gradeLevel.toLowerCase() === "all" || 
+                           op.gradeLevel.toLowerCase().includes(gradeFilter.toLowerCase());
 
-    // 5. Remote filter
-    const matchesRemote = remoteFilter === null || op.isRemote === remoteFilter;
+      // 5. Remote filter
+      const matchesRemote = remoteFilter === null || op.isRemote === remoteFilter;
 
-    // 6. Paid filter
-    const matchesPaid = paidFilter === null || op.isPaid === paidFilter;
+      // 6. Paid filter
+      const matchesPaid = paidFilter === null || op.isPaid === paidFilter;
 
-    // 7. Length filter
-    let matchesLength = true;
-    if (lengthFilter !== "All" && op.programLength) {
-      const len = op.programLength.toLowerCase();
-      if (lengthFilter === "Short") {
-        matchesLength = len.includes("week") || len.includes("day") || len.includes("hour");
-      } else if (lengthFilter === "Medium") {
-        matchesLength = len.includes("month") || len.includes("summer");
-      } else if (lengthFilter === "Long") {
-        matchesLength = len.includes("year") || len.includes("4 year") || len.includes("ongoing");
+      // 7. Length filter
+      let matchesLength = true;
+      if (lengthFilter !== "All" && op.programLength) {
+        const len = op.programLength.toLowerCase();
+        if (lengthFilter === "Short") {
+          matchesLength = len.includes("week") || len.includes("day") || len.includes("hour");
+        } else if (lengthFilter === "Medium") {
+          matchesLength = len.includes("month") || len.includes("summer");
+        } else if (lengthFilter === "Long") {
+          matchesLength = len.includes("year") || len.includes("4 year") || len.includes("ongoing");
+        }
       }
-    }
 
-    return matchesCategory && matchesCountry && matchesGrade && matchesRemote && matchesPaid && matchesLength;
-  });
+      return matchesCategory && matchesCountry && matchesGrade && matchesRemote && matchesPaid && matchesLength;
+    });
+  }, [opportunities, categoryFilter, countryFilter, gradeFilter, remoteFilter, paidFilter, lengthFilter]);
 
   // Prioritize country-based matches first
-  const sortedOpportunities = [...filteredOpportunities].sort((a, b) => {
-    if (!appUser) return 0;
-    const countryA = a.country || "";
-    const countryB = b.country || "";
-    const userCountry = appUser.country || "";
+  const sortedOpportunities = useMemo(() => {
+    return [...filteredOpportunities].sort((a, b) => {
+      if (!appUser) return 0;
+      const countryA = a.country || "";
+      const countryB = b.country || "";
+      const userCountry = appUser.country || "";
 
-    // Exact matches go first
-    if (countryA.toLowerCase() === userCountry.toLowerCase() && countryB.toLowerCase() !== userCountry.toLowerCase()) return -1;
-    if (countryB.toLowerCase() === userCountry.toLowerCase() && countryA.toLowerCase() !== userCountry.toLowerCase()) return 1;
+      // Exact matches go first
+      if (countryA.toLowerCase() === userCountry.toLowerCase() && countryB.toLowerCase() !== userCountry.toLowerCase()) return -1;
+      if (countryB.toLowerCase() === userCountry.toLowerCase() && countryA.toLowerCase() !== userCountry.toLowerCase()) return 1;
 
-    // Global matches go second
-    if (countryA.toLowerCase() === "global" && countryB.toLowerCase() !== "global") return -1;
-    if (countryB.toLowerCase() === "global" && countryA.toLowerCase() !== "global") return 1;
+      // Global matches go second
+      if (countryA.toLowerCase() === "global" && countryB.toLowerCase() !== "global") return -1;
+      if (countryB.toLowerCase() === "global" && countryA.toLowerCase() !== "global") return 1;
 
-    return 0;
-  });
+      return 0;
+    });
+  }, [filteredOpportunities, appUser]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -511,108 +516,17 @@ export default function Opportunities() {
             </div>
           ) : sortedOpportunities.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {sortedOpportunities.map(op => {
-                const matchScore = getMatchScore(op, appUser);
-                const isLocalMatch = appUser && op.country?.toLowerCase() === appUser.country?.toLowerCase();
-                const isGlobal = op.country?.toLowerCase() === "global";
-
-                let colorClasses = "bg-emerald-50 text-emerald-700 border-emerald-100";
-                const catLower = op.category.toLowerCase();
-                if (catLower.includes("scholarship")) colorClasses = "bg-purple-50 text-purple-700 border-purple-100";
-                else if (catLower.includes("competition")) colorClasses = "bg-blue-50 text-blue-700 border-blue-100";
-                else if (catLower.includes("internship")) colorClasses = "bg-orange-50 text-orange-700 border-orange-100";
-                else if (catLower.includes("hackathon")) colorClasses = "bg-rose-50 text-rose-700 border-rose-100";
-                else if (catLower.includes("research")) colorClasses = "bg-sky-50 text-sky-700 border-sky-100";
-                else if (catLower.includes("volunteer")) colorClasses = "bg-amber-50 text-amber-700 border-amber-100";
-
-                return (
-                  <div key={op.id} className={cn("bg-white rounded-3xl border p-6 shadow-sm flex flex-col relative transition-all duration-200 hover:shadow-md", isLocalMatch ? "border-indigo-300 ring-2 ring-indigo-50/50" : "border-slate-200 hover:border-indigo-300")}>
-                    
-                    {/* Country Badge */}
-                    <div className="absolute top-6 right-14 flex gap-1">
-                      {isLocalMatch && (
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-100">
-                          {op.country}
-                        </span>
-                      )}
-                      {isGlobal && (
-                        <span className="px-2 py-0.5 bg-slate-50 text-slate-600 text-[10px] font-bold rounded border border-slate-100">
-                          Global
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="absolute top-5 right-5">
-                      <button 
-                        onClick={(e) => { e.preventDefault(); toggleBookmark(op.id); }}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors bg-white hover:bg-slate-50 rounded-full z-10 relative shadow-sm border border-slate-100"
-                      >
-                        <Bookmark className={cn("h-4 w-4", bookmarks.includes(op.id) ? "fill-indigo-600 text-indigo-600" : "")} />
-                      </button>
-                    </div>
-
-                    <div className="flex justify-between items-start mb-3.5">
-                      <span className={cn("px-2.5 py-1 text-[10px] font-bold uppercase rounded-md tracking-wider border", colorClasses)}>
-                        {op.category}
-                      </span>
-                    </div>
-
-                    <h4 className="text-base font-bold text-slate-900 leading-snug mb-1 line-clamp-2 min-h-[2.5rem]">{op.title}</h4>
-                    <p className="text-xs font-bold text-indigo-600 mb-3">{op.organization}</p>
-                    <p className="text-xs text-slate-500 flex-1 mb-4 line-clamp-3 leading-relaxed">{op.description}</p>
-                    
-                    {/* Eligibility standard field */}
-                    {op.eligibility && (
-                      <p className="text-[11px] text-slate-400 line-clamp-1 mb-3.5 italic bg-slate-50 px-2 py-1 rounded border border-slate-100">
-                        <span className="font-semibold text-slate-600">Eligible:</span> {op.eligibility}
-                      </p>
-                    )}
-
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold mb-4">
-                       <span className="flex items-center gap-1">
-                          <Globe className="h-3 w-3 text-amber-500" /> Trust: {op.trustScore || 85}/100
-                       </span>
-                       {op.competitionLevel && (
-                         <span className={cn("px-2 py-0.5 rounded", 
-                           op.competitionLevel === "Low" ? "bg-emerald-50 text-emerald-600" :
-                           op.competitionLevel === "Medium" ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
-                         )}>
-                           {op.competitionLevel} Comp.
-                         </span>
-                       )}
-                    </div>
-
-                    {/* Meta section */}
-                    <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 mb-4">
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">Deadline: {op.deadline ? new Date(op.deadline).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : "Rolling"}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 justify-end">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">{op.isRemote ? "Virtual" : (op.city ? `${op.city}, ${op.region || ''}` : op.location || "Varies")}</span>
-                      </div>
-                    </div>
-                    {matchScore !== null && (
-                      <div className="flex items-center justify-between bg-indigo-50/50 border border-indigo-100/60 px-3 py-2 rounded-xl mb-4">
-                        <div className="flex items-center gap-1.5 text-xs text-indigo-700 font-bold">
-                          <Sparkles className="h-3.5 w-3.5 text-indigo-500 shrink-0" /> AI Match Score
-                        </div>
-                        <span className="text-xs font-black text-indigo-700">{matchScore}% Match</span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      <Link 
-                        to={`/opportunities/${op.id}`} 
-                        className={cn("w-full py-2.5 text-center text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer", matchScore && matchScore >= 85 ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-slate-900 text-white hover:bg-indigo-800")}
-                      >
-                        View Details & Apply
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
+              {sortedOpportunities.map(op => (
+                <OpportunityCard 
+                  key={op.id}
+                  op={op}
+                  matchScore={getMatchScore(op, appUser)}
+                  isLocalMatch={!!(appUser && op.country?.toLowerCase() === appUser.country?.toLowerCase())}
+                  isGlobal={op.country?.toLowerCase() === "global"}
+                  isBookmarked={bookmarks.includes(op.id)}
+                  toggleBookmark={toggleBookmark}
+                />
+              ))}
             </div>
           ) : (
             <EmptyState 
