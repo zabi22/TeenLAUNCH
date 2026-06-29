@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
@@ -421,6 +422,67 @@ async function seedOpportunitiesIfEmpty() {
   }
 }
 
+async function ensureMigrationHistory() {
+  try {
+    console.log("Checking database state for existing tables...");
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'academic_profiles'
+      );
+    `);
+    
+    const academicProfilesExist = tableCheck.rows[0]?.exists;
+    if (academicProfilesExist) {
+      console.log("Database tables (e.g., academic_profiles) already exist. Ensuring __drizzle_migrations is synchronized...");
+      
+      // 1. Create __drizzle_migrations table if not exists
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS "public"."__drizzle_migrations" (
+          id SERIAL PRIMARY KEY,
+          hash text NOT NULL,
+          created_at bigint
+        );
+      `);
+
+      // 2. Compute hashes and insert for 0000 and 0001
+      const migrationFiles = ["0000_minor_kree.sql", "0001_graceful_ulik.sql"];
+      const drizzleDir = path.join(process.cwd(), "drizzle");
+
+      for (const fileName of migrationFiles) {
+        const filePath = path.join(drizzleDir, fileName);
+        if (fs.existsSync(filePath)) {
+          const fileContent = fs.readFileSync(filePath, "utf8");
+          const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
+
+          // Check if this hash is already in the table
+          const hashCheck = await pool.query(
+            'SELECT 1 FROM "public"."__drizzle_migrations" WHERE hash = $1',
+            [hash]
+          );
+
+          if (hashCheck.rowCount === 0) {
+            console.log(`Pre-populating migration entry for ${fileName}...`);
+            await pool.query(
+              'INSERT INTO "public"."__drizzle_migrations" (hash, created_at) VALUES ($1, $2)',
+              [hash, Date.now()]
+            );
+          } else {
+            console.log(`Migration entry for ${fileName} already present in __drizzle_migrations.`);
+          }
+        } else {
+          console.warn(`Warning: Expected migration file ${fileName} was not found at ${filePath}`);
+        }
+      }
+    } else {
+      console.log("Database is clean. Drizzle will run normal migrations.");
+    }
+  } catch (err) {
+    console.error("Failed to run pre-migration check / alignment:", err);
+  }
+}
+
 async function startServer() {
   try {
     console.log("Testing database connection...");
@@ -430,6 +492,9 @@ async function startServer() {
     console.error("CRITICAL: Database connection failed. Ensure DATABASE_URL is correct and reachable:", error);
     process.exit(1);
   }
+
+  // Sync migration history if tables exist but tracking is missing
+  await ensureMigrationHistory();
 
   try {
     console.log("Running migrations...");
