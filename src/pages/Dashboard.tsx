@@ -5,12 +5,16 @@ import { Bookmark, Target, Sparkles, TrendingUp, Zap, Trophy, MessageSquare, Che
 import Markdown from "react-markdown";
 import { motion, AnimatePresence } from "motion/react";
 
+import { GenerativeUIProvider, GenerativeUIConfig } from "../components/GenerativeUIProvider";
 import { EmptyState } from '../components/EmptyState';
 
 export default function Dashboard() {
   const { user, appUser, loading, refreshAppUser } = useAuth();
   const [bookmarkedOps, setBookmarkedOps] = useState<any[]>([]);
   const [recommendedOps, setRecommendedOps] = useState<any[]>([]);
+  const [uiConfig, setUiConfig] = useState<GenerativeUIConfig | null>(null);
+  const [isUiLoading, setIsUiLoading] = useState(false);
+
   
   const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
@@ -186,8 +190,17 @@ export default function Dashboard() {
         });
         setRecommendedOps(sorted.slice(0, 3));
       }
+      // Fetch AI Generative UI Config
+      setIsUiLoading(true);
+      const uiRes = await fetch("/api/dashboard/generative-ui", { headers: { Authorization: `Bearer ${token}` } });
+      if (uiRes.ok) {
+        const uiData = await uiRes.json();
+        setUiConfig(uiData);
+      }
+      setIsUiLoading(false);
     } catch (err) {
       console.error(err);
+      setIsUiLoading(false);
     }
   };
 
@@ -232,6 +245,16 @@ export default function Dashboard() {
         {/* Main Column: AI Coach & Action Center */}
         <div className="lg:col-span-2 space-y-6">
           
+          {/* Dynamic Generative UI Section */}
+          {uiConfig && (
+            <div className="mb-8">
+              <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-indigo-500" /> Focus Mode: Active Priority
+              </h2>
+              <GenerativeUIProvider config={uiConfig} />
+            </div>
+          )}
+
           {/* AI Mentor Centerpiece */}
           <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden flex flex-col">
             <div className="p-6 border-b border-slate-800 bg-slate-800/50 flex items-center gap-3">

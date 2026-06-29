@@ -120,15 +120,17 @@ export class AIProviderManagerService {
         );
         console.log(`[AI Provider] Successfully handled by: ${provider.name}`);
         return result;
-      } catch (error) {
-        console.error(`[AI Provider] ${provider.name} failed:`, error instanceof Error ? error.message : error);
+      } catch (error: any) {
+        // Detailed error logging to distinguish quota limits, timeouts, or invalid requests
+        console.error(`[AI Provider Error - ${provider.name}] Failed: ${error?.message || error}. Status/Code: ${error?.status || error?.code || 'N/A'}`);
         provider.isHealthy = false;
         provider.lastFailureTime = Date.now();
         lastError = error;
       }
     }
 
-    throw new Error(`All AI providers failed. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+    console.error(`[AI Provider Circuit Breaker] All AI providers failed. Entering degraded read-only mode.`);
+    return `{"error": true, "fallback": true, "message": "The AI service is currently experiencing high load. Please try again in a few minutes. Serving in degraded mode."}`;
   }
 
   private async executeGemini(options: AIGenerateOptions): Promise<string> {

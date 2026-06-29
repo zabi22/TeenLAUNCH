@@ -3,7 +3,12 @@ import path from "path";
 import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import NodeCache from "node-cache";
 dotenv.config();
+
+// Initialize in-memory TTL cache (standard 5-minute TTL)
+export const apiCache = new NodeCache({ stdTTL: 300 });
 
 import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
@@ -454,6 +459,16 @@ async function startServer() {
   );
   app.use(express.json());
 
+  // Set up standard rate limiting for API routes
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // Limit each IP to 200 requests per `window` (here, per 15 minutes)
+    message: { error: "Too many requests from this IP, please try again after 15 minutes" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use("/api/", apiLimiter);
+
   // API Routes
   app.get("/healthz", (req, res) => {
     res.json({ status: "ok" });
@@ -740,6 +755,12 @@ async function startServer() {
 
   app.get("/api/opportunities/stats", async (req, res) => {
     try {
+      const cacheKey = "opportunities_stats";
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+
       const allOps = await db.select().from(opportunities);
       const total = allOps.length;
       
@@ -763,7 +784,9 @@ async function startServer() {
         return acc;
       }, {});
 
-      res.json({ total, newToday, verifiedCount, categories, bySource });
+      const result = { total, newToday, verifiedCount, categories, bySource };
+      apiCache.set(cacheKey, result);
+      res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -782,9 +805,10 @@ async function startServer() {
       if (type === "global") scoutType = "prestigious, high-competition, international";
 
       const systemInstruction = `You are a world-class opportunity scout AI for students. 
-Discover 3 REAL, active, prestigious upcoming opportunities (scholarships, internships, competitions, research, volunteering, hackathons, or summer programs).
+Discover 3 to 5 REAL, active, prestigious upcoming opportunities (scholarships, internships, competitions, research, volunteering, hackathons, or summer programs).
 Your scouting focus should be a ${scoutType} for a student in: ${targetCountry}${targetRegion}${targetCity}.
 If focusing on local, find opportunities in or near the specified city/region. If global, find remote or prestigious international ones.
+Use Chain-of-Thought reasoning to evaluate and score these opportunities based on a 'Diversity Scoring' algorithm ensuring a variety of categories and perfect alignment with an ambitious student profile.
 Return ONLY a valid JSON array of objects representing these opportunities. 
 Ensure the objects match the following JSON schema exactly, with NO wrapping markdown code blocks, NO backticks, and NO trailing commas:
 [
@@ -811,13 +835,15 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
     "completenessScore": "integer between 70 and 100",
     "isVerified": true or false,
     "source": "e.g. 'university_scraper', 'community_submission', 'partner_api'",
-    "collegeValueScore": "integer between 50 and 100"
+    "collegeValueScore": "integer between 50 and 100",
+    "diversityScore": "integer between 50 and 100 indicating contribution to profile diversity"
   }
 ]`;
 
       const textResponse = await generateContentManager(
         systemInstruction,
-        `Discover new student opportunities for: ${targetCountry}`,
+        `Discover new student opportunities for: ${targetCountry}. Ensure 3 to 5 high-quality, varied opportunities (e.g., scholarships, internships, research). Think step-by-step to apply the Diversity Scoring algorithm before outputting the final JSON array.`,
+        true,
         true
       );
 
@@ -909,6 +935,74 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
     }
   });
 
+  // Admin/System: Trigger Crawler Worker
+  // In a real production app, this would be an admin-only endpoint or cron job.
+  app.post("/api/opportunities/crawl", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { url, sourceName } = req.body;
+      if (!url) {
+        return res.status(400).json({ error: "URL is required" });
+      }
+      
+      const { Queue } = await import("bullmq");
+      const crawlerQueue = new Queue('crawlerQueue', {
+        connection: {
+          host: process.env.REDIS_HOST || 'localhost',
+          port: parseInt(process.env.REDIS_PORT || '6379'),
+        }
+      });
+      
+      await crawlerQueue.add('crawl', { url, sourceName: sourceName || 'manual_trigger' });
+      
+      res.json({ success: true, message: "Crawler job added to queue" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generative UI API
+  app.get("/api/dashboard/generative-ui", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+
+      const current_user_goal_status = req.query.status || 'Application Week';
+      const systemInstruction = `You are a Context-Aware Generative UI Engine.
+Output a JSON configuration for a student dashboard.
+The student's current_user_goal_status is '${current_user_goal_status}'.
+You MUST output ONLY valid JSON without markdown wrapping.
+The format must match:
+{
+  "layout": "urgent_focus",
+  "components": [
+    { "type": "DeadlineCounter", "props": { "target": "2026-11-01", "label": "Early Action" } },
+    { "type": "EssayWorkflowStep", "props": { "stepName": "Draft 1 Review", "draftId": "d_123", "status": "urgent" } },
+    { "type": "MilestoneProgressBar", "props": { "title": "Application Readiness", "progress": 7, "total": 10 } }
+  ]
+}`;
+
+      // In production, we pass the user's actual goal context.
+      const aiResult = await aiProviderManager.generateContent({
+        systemInstruction,
+        prompt: "Generate UI layout for current status",
+        isComplex: false,
+        isJson: true
+      });
+
+      let parsedConfig = { layout: "default", components: [] };
+      try {
+        const cleanJson = aiResult.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsedConfig = JSON.parse(cleanJson);
+      } catch (e) {
+        console.error("Failed to parse generative UI output:", aiResult);
+      }
+
+      res.json(parsedConfig);
+    } catch (error: any) {
+      console.error("Generative UI error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Coach Chat API using Gemini
   app.post("/api/coach/chat", requireAuth, async (req: AuthRequest, res) => {
     try {
@@ -920,7 +1014,7 @@ Ensure the objects match the following JSON schema exactly, with NO wrapping mar
       }
 
       const systemInstruction = `You are the TeenLaunch Student Digital Twin AI, an ultra-advanced, always-available strategic mentor for a high school student aiming for elite universities and world-class career goals.
-You are powered by Gemini High Thinking mode. You act as a predictive intelligence and success strategist. Provide highly tactical, actionable advice on academics, venture creation, internships, and scholarships.
+You are powered by Gemini High Thinking mode. Use a Chain-of-Thought reasoning approach to analyze the student's context before responding. Act as a predictive intelligence and success strategist. Provide highly tactical, actionable, step-by-step guidance on academics, venture creation, internships, and scholarships rather than generic advice.
 Keep your responses concise, highly professional, and structured with clean markdown. Your goal is to maximize the student's probability of success.`;
       
       const responseText = await generateChatContent(systemInstruction, history, message, true);
