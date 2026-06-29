@@ -8,6 +8,13 @@
       "when": 1782650140304,
       "tag": "0000_minor_kree",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782734419518,
+      "tag": "0001_graceful_ulik",
+      "breakpoints": true
     }
   ]
 }

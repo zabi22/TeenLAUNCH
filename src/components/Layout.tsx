@@ -10,12 +10,25 @@ import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
 import { cn } from "../lib/utils.ts";
 import Logo from "./Logo.tsx";
+import Onboarding from "../pages/Onboarding.tsx";
 
 export default function Layout() {
-  const { user, signIn, logOut, appUser, isOfflineMode } = useAuth();
+  const { user, signIn, logOut, appUser, isOfflineMode, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center animate-pulse" id="loading-spinner">
+        <div className="h-8 w-8 border-4 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (user && appUser && appUser.onboardingComplete === false) {
+    return <Onboarding />;
+  }
 
   const handleAuth = async () => {
     if (user) {
@@ -29,19 +42,13 @@ export default function Layout() {
 
   const navItems = [
     { section: "Core", items: [
-      { name: "Digital Twin", path: "/twin", icon: Sparkles },
       { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-      { name: "AI Agent Ecosystem", path: "/agents", icon: Zap },
       { name: "Opportunity Scout", path: "/opportunities", icon: Search },
-      { name: "Discovery Network", path: "/discovery", icon: Globe },
       { name: "Strategic Roadmap", path: "/roadmap", icon: Map },
     ]},
     { section: "Network", items: [
       { name: "Student Network", path: "/network", icon: Users },
       { name: "Messages", path: "/messages", icon: MessageSquare },
-      { name: "Research Matching", path: "/research", icon: Search },
-      { name: "Leaderboard", path: "/leaderboard", icon: Award },
-      { name: "Opportunity Market", path: "/marketplace", icon: Briefcase },
     ]},
     { section: "Academics", items: [
       { name: "Academic Profile", path: "/academic-profile", icon: GraduationCap },
@@ -51,18 +58,7 @@ export default function Layout() {
       { name: "App Tracker", path: "/applications", icon: Shield },
     ]},
     { section: "Experience", items: [
-      { name: "Portfolio Builder", path: "/portfolio", icon: FolderOpen },
       { name: "Activity Tracker", path: "/activities", icon: Activity },
-      { name: "Achievement Vault", path: "/vault", icon: Shield },
-      { name: "Founder Mode", path: "/founder", icon: Zap },
-    ]},
-    { section: "Future", items: [
-      { name: "Career Simulator", path: "/career", icon: Briefcase },
-      { name: "Impact Analytics", path: "/analytics", icon: Activity },
-    ]},
-    { section: "Portals", items: [
-      { name: "Parent Portal", path: "/parent", icon: UserIcon },
-      { name: "Counselor Portal", path: "/counselor", icon: Shield },
     ]}
   ];
 

@@ -552,6 +552,49 @@ async function startServer() {
     }
   });
 
+  app.post("/api/users/onboarding", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });
+      const { name, age, country } = req.body;
+      
+      if (!name || age === undefined || age === null || !country) {
+        return res.status(400).json({
+          error_code: 'BAD_REQUEST',
+          user_friendly_message: 'Full Name, Age, and Country are required.'
+        });
+      }
+
+      const parsedAge = parseInt(age, 10);
+      if (isNaN(parsedAge) || parsedAge <= 0) {
+        return res.status(400).json({
+          error_code: 'BAD_REQUEST',
+          user_friendly_message: 'Age must be a valid positive number.'
+        });
+      }
+
+      const updatedUser = await db.update(users)
+        .set({ 
+          name, 
+          age: parsedAge, 
+          country, 
+          onboardingComplete: true 
+        })
+        .where(eq(users.uid, req.user.uid))
+        .returning();
+
+      if (updatedUser.length === 0) {
+        return res.status(404).json({
+          error_code: 'NOT_FOUND',
+          user_friendly_message: 'User profile not found.'
+        });
+      }
+
+      res.json(updatedUser[0]);
+    } catch (error: any) {
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'An unexpected error occurred on the server.' });
+    }
+  });
+
   // Academic Profile
   app.get("/api/academic-profile", requireAuth, async (req: AuthRequest, res) => {
     try {

@@ -17,6 +17,9 @@ interface AppUser {
   portfolioUrl?: string;
   skills?: string;
   verificationBadges?: string;
+  username?: string;
+  age?: number;
+  onboardingComplete?: boolean;
 }
 
 interface AuthContextType {

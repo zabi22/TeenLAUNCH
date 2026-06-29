@@ -16,6 +16,9 @@ export const users = pgTable('users', {
   portfolioUrl: text('portfolio_url'),
   skills: text('skills'),
   verificationBadges: text('verification_badges').default(''),
+  username: text('username'),
+  age: integer('age'),
+  onboardingComplete: boolean('onboarding_complete').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
