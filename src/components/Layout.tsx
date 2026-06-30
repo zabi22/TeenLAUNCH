@@ -136,9 +136,9 @@ export default function Layout() {
                     <Bell size={20} />
                     <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full"></span>
                 </button>
-                <button className="p-2 hover:bg-slate-800 rounded-full">
+                <Link to="/settings" className="p-2 hover:bg-slate-800 rounded-full inline-block">
                     <Settings size={20} />
-                </button>
+                </Link>
             </div>
         </header>
         

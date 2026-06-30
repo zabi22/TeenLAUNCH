@@ -99,13 +99,13 @@ export default function Profile() {
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Your Profile</h1>
-        <p className="mt-2 text-slate-600">Complete your profile to get personalized opportunity recommendations.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Your Profile</h1>
+        <p className="mt-2 text-slate-600 dark:text-slate-400">Complete your profile to get personalized opportunity recommendations.</p>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm p-8">
-        <div className="flex items-center gap-4 mb-8 pb-8 border-b border-slate-100">
-          <div className="h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm p-8">
+        <div className="flex items-center gap-4 mb-8 pb-8 border-b border-slate-100 dark:border-slate-800">
+          <div className="h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
             {user.photoURL ? (
               <img src={user.photoURL} alt="Profile" className="h-16 w-16 rounded-full" />
             ) : (
@@ -113,18 +113,18 @@ export default function Profile() {
             )}
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-900">{appUser?.name || user.displayName}</h2>
-            <p className="text-sm text-slate-500">{appUser?.email || user.email}</p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{appUser?.name || user.displayName}</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{appUser?.email || user.email}</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">Grade Level <span className="text-rose-500">*</span></label>
+            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Grade Level <span className="text-rose-500">*</span></label>
             <select 
               value={formData.grade}
               onChange={(e) => setFormData({...formData, grade: e.target.value})}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 bg-white shadow-sm"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 shadow-sm"
               required
             >
               <option value="">Select your grade</option>
@@ -138,11 +138,11 @@ export default function Profile() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">Country <span className="text-rose-500">*</span></label>
+            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Country <span className="text-rose-500">*</span></label>
             <select 
               value={formData.country}
               onChange={(e) => setFormData({...formData, country: e.target.value})}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 bg-white shadow-sm"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 shadow-sm"
               required
             >
               <option value="">Select your country</option>
@@ -153,24 +153,24 @@ export default function Profile() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">Academic & Extracurricular Interests</label>
+            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Academic & Extracurricular Interests</label>
             <textarea 
               value={formData.interests}
               onChange={(e) => setFormData({...formData, interests: e.target.value})}
               placeholder="e.g., Computer Science, Debate, Biology, Creative Writing..."
               rows={3}
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 bg-white shadow-sm resize-none"
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 shadow-sm resize-none"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">Career Goals</label>
+            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Career Goals</label>
             <textarea 
               value={formData.goals}
               onChange={(e) => setFormData({...formData, goals: e.target.value})}
               placeholder="e.g., Software Engineer, Medical Doctor, Entrepreneur..."
               rows={3}
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 bg-white shadow-sm resize-none"
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 shadow-sm resize-none"
             />
           </div>
 

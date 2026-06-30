@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard.tsx";
 import Opportunities from "./pages/Opportunities.tsx";
 import OpportunityDetail from "./pages/OpportunityDetail.tsx";
 import Profile from "./pages/Profile.tsx";
+import Settings from "./pages/Settings.tsx";
 import AcademicProfile from "./pages/AcademicProfile.tsx";
 import ApplicationTracker from "./pages/ApplicationTracker.tsx";
 import Roadmap from "./pages/Roadmap.tsx";
@@ -67,6 +68,7 @@ function AnimatedRoutes() {
           <Route path="opportunities" element={<PageTransition><Opportunities /></PageTransition>} />
           <Route path="opportunities/:id" element={<PageTransition><OpportunityDetail /></PageTransition>} />
           <Route path="profile" element={<PageTransition><Profile /></PageTransition>} />
+          <Route path="settings" element={<PageTransition><Settings /></PageTransition>} />
           <Route path="academic-profile" element={<PageTransition><AcademicProfile /></PageTransition>} />
           <Route path="applications" element={<PageTransition><ApplicationTracker /></PageTransition>} />
           <Route path="analyzer" element={<PageTransition><CollegeAnalyzer /></PageTransition>} />
