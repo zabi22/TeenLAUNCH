@@ -10,6 +10,7 @@ import { AICoachChat } from "../components/Dashboard/AICoachChat";
 import { AnimatedCounter } from "../components/ui/AnimatedCounter";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Card } from "../components/ui/Card";
+import { ParticleBackground } from "../components/ParticleBackground";
 
 const SavedOpItem = memo(function SavedOpItem({ op }: { op: any }) {
   return (
@@ -212,8 +213,8 @@ export default function Dashboard() {
   if (!user) return <Navigate to="/" />;
 
   return (
-    <div className="flex flex-col gap-6 pb-12 p-6">
-      
+    <div className="flex flex-col gap-6 pb-12 p-6 relative">
+      <ParticleBackground />
       {/* Welcome & XP Status */}
       <div className="col-span-full bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>

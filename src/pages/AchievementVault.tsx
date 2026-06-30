@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Award, Upload, CheckCircle, Clock, ShieldCheck, Download, Plus, Filter, FileText, ChevronRight, Sparkles } from "lucide-react";
+import { useConfetti } from "../hooks/useConfetti";
+import { useToast } from "../hooks/useToast";
 
 interface Achievement {
   id: string;
@@ -18,6 +20,8 @@ export default function AchievementVault() {
   const [dragActive, setDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const { triggerConfetti } = useConfetti();
+  const { addToast } = useToast();
   
   const [achievements, setAchievements] = useState<Achievement[]>([
     { id: "1", title: "AP Scholar with Distinction", issuer: "College Board", category: "Academics", date: "June 2025", status: "Verified", fileSize: "1.2 MB", badge: "Gold Medalist" },
@@ -45,32 +49,35 @@ export default function AchievementVault() {
     }
   };
 
-  const simulateUpload = (fileName: string) => {
+  const simulateUpload = (filename: string) => {
     setIsUploading(true);
     setUploadProgress(0);
+    
     const interval = setInterval(() => {
-      setUploadProgress((prev) => {
+      setUploadProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
           setTimeout(() => {
             setIsUploading(false);
-            const newAch: Achievement = {
-              id: (achievements.length + 1).toString(),
-              title: fileName.replace(/\.[^/.]+$/, ""),
-              issuer: "Self-Reported (Pending Validation)",
+            setAchievements([{
+              id: Date.now().toString(),
+              title: filename.split('.')[0] || "New Achievement",
+              issuer: "Self Uploaded",
               category: "Extracurriculars",
-              date: "June 2026",
+              date: "Just now",
               status: "Pending",
-              fileSize: "1.1 MB"
-            };
-            setAchievements([newAch, ...achievements]);
+              fileSize: "Unknown"
+            }, ...achievements]);
+            triggerConfetti();
+            addToast("success", "Achievement securely added to vault!");
           }, 500);
           return 100;
         }
         return prev + 10;
       });
-    }, 100);
+    }, 200);
   };
+
 
   const filteredAchievements = activeFilter === "All" 
     ? achievements 

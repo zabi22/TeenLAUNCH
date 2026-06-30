@@ -1,10 +1,20 @@
-import { Link } from "react-router-dom";
-import { ArrowRight, Sparkles, GraduationCap, Code, Trophy, Search, Globe } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, Sparkles, GraduationCap, Code, Trophy, Search, Globe, LogIn, Mail } from "lucide-react";
 import { useAuth } from "../components/AuthContext.tsx";
 import Logo from "../components/Logo.tsx";
+import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 
 export default function Landing() {
   const { signIn, user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleDemoLogin = async () => {
+    // A trick to sign in as Demo directly if that logic is exposed, 
+    // or we just call signIn and it will fallback to Demo on error.
+    await signIn();
+    navigate("/dashboard");
+  };
 
   return (
     <div className="flex flex-col items-center w-full min-h-screen bg-slate-50">
@@ -19,12 +29,12 @@ export default function Landing() {
               Explore Opportunities
             </Link>
             {!user ? (
-              <button
-                onClick={() => signIn()}
+              <Link
+                to="/login"
                 className="inline-flex h-9 items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-black text-white px-5 transition-all shadow-md shadow-indigo-600/10 hover:scale-[1.02]"
               >
                 Log In / Register
-              </button>
+              </Link>
             ) : (
               <Link
                 to="/dashboard"
@@ -55,13 +65,13 @@ export default function Landing() {
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
           {!user ? (
-            <button
-              onClick={() => signIn()}
+            <Link
+              to="/login"
               className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-700"
             >
               Get Started for Free
               <ArrowRight className="ml-2 h-4 w-4" />
-            </button>
+            </Link>
           ) : (
              <Link
               to="/dashboard"
@@ -146,3 +156,4 @@ export default function Landing() {
     </div>
   );
 }
+

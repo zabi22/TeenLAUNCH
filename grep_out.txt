@@ -1,0 +1,252 @@
+src/pages/Leaderboard.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/Leaderboard.tsx:        <div className="shrink-0 bg-slate-800/50 border border-slate-700/50 p-6 rounded-2xl flex items-center gap-4 shadow-xl">
+src/pages/Leaderboard.tsx:          <div className="flex bg-slate-200/60 p-1 rounded-xl w-fit">
+src/pages/Leaderboard.tsx:                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-100 border-4 border-slate-300 flex items-center justify-center font-bold text-lg text-slate-700 shadow-lg overflow-hidden">
+src/pages/Leaderboard.tsx:                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-400 text-white font-black text-xs px-2 py-0.5 rounded-full shadow-md">
+src/pages/Leaderboard.tsx:                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-50 border-4 border-dashed border-slate-200 flex items-center justify-center font-bold text-lg text-slate-300">
+src/pages/Leaderboard.tsx:                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-200 text-slate-500 font-bold text-[10px] px-2 py-0.5 rounded-full shadow-sm">
+src/pages/Leaderboard.tsx:                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-50 border-4 border-dashed border-slate-200 flex items-center justify-center font-bold text-2xl text-slate-300">
+src/pages/Leaderboard.tsx:                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-200 text-slate-500 font-bold text-[10px] px-3 py-1 rounded-full shadow-sm">
+src/pages/Leaderboard.tsx:                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-50 border-4 border-dashed border-slate-200 flex items-center justify-center font-bold text-lg text-slate-300">
+src/pages/Leaderboard.tsx:                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-200 text-slate-500 font-bold text-[10px] px-2 py-0.5 rounded-full shadow-sm">
+src/pages/Leaderboard.tsx:            <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center text-xs font-bold text-slate-400 uppercase tracking-widest px-6">
+src/pages/Leaderboard.tsx:                  className={`p-4 px-6 flex items-center text-sm font-medium transition-colors ${u.id === appUser?.id ? 'bg-indigo-50/50 hover:bg-indigo-50 border-l-4 border-l-indigo-600 pl-5' : 'hover:bg-slate-50'}`}
+src/pages/Leaderboard.tsx:                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden ${u.id === appUser?.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+src/pages/Leaderboard.tsx:                <div key={c.id} className="border border-slate-100 p-4 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition-colors">
+src/pages/Leaderboard.tsx:          <div className="bg-slate-900 p-6 rounded-3xl text-white border border-slate-800 relative overflow-hidden">
+src/pages/CollegeAnalyzer.tsx:          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-white shadow-lg">
+src/pages/CollegeAnalyzer.tsx:                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500" 
+src/pages/CollegeAnalyzer.tsx:                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500" 
+src/pages/CollegeAnalyzer.tsx:                  <input type="checkbox" checked={hasLeadershipSimulation} onChange={e => setHasLeadershipSimulation(e.target.checked)} className="rounded text-indigo-500 bg-slate-800 border-slate-700" />
+src/pages/CollegeAnalyzer.tsx:                  <input type="checkbox" checked={hasResearchSimulation} onChange={e => setHasResearchSimulation(e.target.checked)} className="rounded text-indigo-500 bg-slate-800 border-slate-700" />
+src/pages/CollegeAnalyzer.tsx:                className="w-full mt-4 py-2 text-xs font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+src/pages/CollegeAnalyzer.tsx:                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500" 
+src/pages/CollegeAnalyzer.tsx:                  className="w-full flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg text-left group"
+src/pages/CollegeAnalyzer.tsx:                    className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+src/pages/CollegeAnalyzer.tsx:                          <span key={t} className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+src/pages/CollegeAnalyzer.tsx:                      <div className="mb-4 text-sm text-slate-700 italic bg-slate-50 p-3 rounded-xl border border-slate-100">
+src/pages/CollegeAnalyzer.tsx:              <div className="col-span-1 md:col-span-2 text-center py-24 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
+src/pages/Onboarding.tsx:    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 md:p-8">
+src/pages/Onboarding.tsx:          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-6 text-center">
+src/pages/Onboarding.tsx:              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
+src/pages/Onboarding.tsx:              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
+src/pages/Onboarding.tsx:              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-semibold"
+src/pages/Onboarding.tsx:                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
+src/pages/Onboarding.tsx:              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-colors"
+src/pages/Roadmap.tsx:      <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-xl flex flex-col md:flex-row gap-6 items-end relative overflow-hidden">
+src/pages/Roadmap.tsx:                  className="w-full pl-12 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white font-medium"
+src/pages/Roadmap.tsx:                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white font-medium appearance-none"
+src/pages/Roadmap.tsx:            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl relative overflow-hidden">
+src/pages/Roadmap.tsx:                <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-700/50">
+src/pages/Roadmap.tsx:                    <li className="flex gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+src/pages/Roadmap.tsx:                    <li className="flex gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+src/pages/ResearchMatching.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/ResearchMatching.tsx:      <div className="flex bg-slate-200/60 p-1 rounded-xl w-fit">
+src/pages/ResearchMatching.tsx:                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+src/pages/ResearchMatching.tsx:                      className="mt-6 border border-slate-200 bg-slate-50 rounded-2xl p-5 space-y-4"
+src/pages/ResearchMatching.tsx:          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 text-white space-y-4">
+src/pages/OpportunityMarketplace.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/OpportunityMarketplace.tsx:        <div className="shrink-0 bg-slate-800/40 border border-slate-700/60 p-6 rounded-2xl text-center shadow-xl">
+src/pages/ActivityTracker.tsx:              <button type="submit" className="px-6 py-2 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800 transition-colors inline-flex items-center gap-2">
+src/pages/ActivityTracker.tsx:                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+src/pages/EssayAssistant.tsx:      <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
+src/pages/EssayAssistant.tsx:              className="w-full min-h-[120px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none"
+src/pages/EssayAssistant.tsx:                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+src/pages/EssayAssistant.tsx:                className="w-full flex-1 min-h-[300px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none mb-4"
+src/pages/EssayAssistant.tsx:            <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6 shadow-xl relative overflow-hidden">
+src/pages/EssayAssistant.tsx:                        <li key={i} className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">{fb}</li>
+src/pages/EssayAssistant.tsx:              <div className="bg-slate-50 border border-dashed border-slate-200 rounded-3xl h-full min-h-[400px] flex flex-col items-center justify-center text-center p-8">
+src/pages/EssayAssistant.tsx:              <div className="bg-slate-50 border border-dashed border-slate-200 rounded-3xl h-full min-h-[400px] flex flex-col items-center justify-center text-center p-8">
+src/pages/DigitalTwin.tsx:      <div className="relative bg-slate-950 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
+src/pages/DigitalTwin.tsx:        <div className="relative shrink-0 bg-slate-900/60 border border-slate-800 p-8 rounded-3xl text-center shadow-2xl min-w-[240px] overflow-hidden group">
+src/pages/DigitalTwin.tsx:            <div className="space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/80 hover:border-slate-200/60 transition-colors">
+src/pages/DigitalTwin.tsx:                className="w-full accent-indigo-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+src/pages/DigitalTwin.tsx:            <div className="space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/80 hover:border-slate-200/60 transition-colors">
+src/pages/DigitalTwin.tsx:                className="w-full accent-indigo-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+src/pages/DigitalTwin.tsx:            <div className="space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/80 hover:border-slate-200/60 transition-colors">
+src/pages/DigitalTwin.tsx:                className="w-full accent-indigo-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+src/pages/DigitalTwin.tsx:            <div className="space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/80 hover:border-slate-200/60 transition-colors">
+src/pages/DigitalTwin.tsx:                className="w-full accent-indigo-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+src/pages/DigitalTwin.tsx:          <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 flex gap-3 text-xs text-slate-500 leading-relaxed">
+src/pages/DigitalTwin.tsx:          <div className="bg-slate-950 p-6 sm:p-7 rounded-3xl border border-slate-800 text-white space-y-6 relative overflow-hidden">
+src/pages/DigitalTwin.tsx:              <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
+src/pages/DigitalTwin.tsx:              <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
+src/pages/AcademicProfile.tsx:        <div className="flex items-center gap-4 bg-slate-900 p-2 pl-4 pr-6 rounded-full shadow-lg text-white">
+src/pages/AcademicProfile.tsx:                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-indigo-600 focus:outline-none disabled:opacity-70"
+src/pages/AcademicProfile.tsx:              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden relative z-10">
+src/pages/AcademicProfile.tsx:          <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg border-t-4 border-t-indigo-500">
+src/pages/InterviewPrep.tsx:          <button onClick={nextQuestion} className="absolute top-6 right-6 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 px-3 py-1 rounded-full text-xs font-bold border border-slate-200 transition-colors flex items-center gap-2">
+src/pages/InterviewPrep.tsx:        <div className="bg-slate-50 rounded-3xl p-6 border border-slate-200">
+src/pages/InterviewPrep.tsx:              <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden">
+src/pages/InterviewPrep.tsx:              <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden">
+src/pages/InterviewPrep.tsx:              <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden">
+src/pages/ParentDashboard.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/ParentDashboard.tsx:        <div className="shrink-0 bg-slate-800/40 border border-slate-700/60 p-6 rounded-2xl text-center shadow-xl">
+src/pages/ParentDashboard.tsx:                      : "border-slate-200 bg-slate-50/50 hover:bg-slate-50 text-slate-950 font-medium"
+src/pages/ParentDashboard.tsx:          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 text-white space-y-4">
+src/pages/ImpactAnalytics.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/ImpactAnalytics.tsx:            <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden">
+src/pages/ImpactAnalytics.tsx:            <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
+src/pages/ImpactAnalytics.tsx:                <div key={l.id} className="p-5 flex items-center justify-between text-sm hover:bg-slate-50/40 transition-colors">
+src/pages/ImpactAnalytics.tsx:          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 text-white space-y-4">
+src/pages/AiAgents.tsx:                      ? "bg-slate-900 text-white border-slate-900 shadow-xl" 
+src/pages/AiAgents.tsx:                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+src/pages/AiAgents.tsx:                  <div className={`p-3 rounded-xl shrink-0 ${isActive ? agent.avatarColor : "bg-slate-100 text-slate-600"}`}>
+src/pages/AiAgents.tsx:          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3 shrink-0">
+src/pages/AiAgents.tsx:          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/20">
+src/pages/AiAgents.tsx:                  msg.role === "model" ? activeAgent.avatarColor : "bg-slate-800"
+src/pages/AiAgents.tsx:          <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex gap-2 overflow-x-auto shrink-0 scrollbar-none">
+src/pages/AiAgents.tsx:                className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm rounded-2xl py-3.5 pl-5 pr-12 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all font-medium"
+src/pages/PortfolioBuilder.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/PortfolioBuilder.tsx:        <div className="lg:col-span-2 bg-slate-50 border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+src/pages/PortfolioBuilder.tsx:                  <span className="px-2 py-0.5 bg-slate-50 text-slate-400 text-[9px] font-bold rounded border border-slate-100">Stockholm Gymnasium</span>
+src/pages/PortfolioBuilder.tsx:                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+src/pages/PortfolioBuilder.tsx:                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+src/pages/Dashboard.tsx:      className="block p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-all hover:border-indigo-200 group relative"
+src/pages/Dashboard.tsx:      <div className="col-span-full bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
+src/pages/Dashboard.tsx:        <div className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800 flex items-center gap-6 min-w-[320px] relative z-10">
+src/pages/Dashboard.tsx:          <div className="h-10 w-px bg-slate-800"></div>
+src/pages/Dashboard.tsx:             <div className="h-2 w-32 bg-slate-800 rounded-full overflow-hidden">
+src/pages/Dashboard.tsx:            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
+src/pages/Dashboard.tsx:                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 bg-slate-50 font-medium shadow-sm"
+src/pages/Dashboard.tsx:                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 bg-slate-50 font-medium shadow-sm"
+src/pages/Landing.tsx:    <div className="flex flex-col items-center w-full min-h-screen bg-slate-50">
+src/pages/Landing.tsx:            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+src/pages/Landing.tsx:                  <button onClick={handleDemoLogin} className="w-full flex items-center justify-center gap-3 bg-slate-900 text-white rounded-xl py-3.5 font-bold hover:bg-indigo-600 transition-colors">
+src/pages/Landing.tsx:                  <button onClick={handleDemoLogin} className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 rounded-xl py-3.5 font-bold hover:bg-slate-50 transition-colors">
+src/pages/Landing.tsx:      <header className="w-full bg-slate-950 border-b border-slate-900 sticky top-0 z-50 shadow-xl shadow-slate-950/10">
+src/pages/Landing.tsx:              className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-700"
+src/pages/Landing.tsx:              className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-700"
+src/pages/Landing.tsx:      <section className="w-full py-16 md:py-24 border-t border-slate-100 bg-slate-50/50 rounded-3xl my-12 px-6 max-w-5xl">
+src/pages/Opportunities.tsx:              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 bg-slate-50 font-medium"
+src/pages/Opportunities.tsx:              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 bg-slate-50 font-medium"
+src/pages/Opportunities.tsx:              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 bg-slate-50 font-medium"
+src/pages/Opportunities.tsx:                className={cn("py-1.5 text-xs font-bold rounded-lg border transition-all", paidFilter === null ? "bg-indigo-600 border-indigo-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100")}
+src/pages/Opportunities.tsx:                className={cn("py-1.5 text-xs font-bold rounded-lg border transition-all", paidFilter === true ? "bg-indigo-600 border-indigo-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100")}
+src/pages/Opportunities.tsx:                className={cn("py-1.5 text-xs font-bold rounded-lg border transition-all", paidFilter === false ? "bg-indigo-600 border-indigo-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100")}
+src/pages/Opportunities.tsx:                className={cn("py-1.5 text-xs font-bold rounded-lg border transition-all", remoteFilter === null ? "bg-indigo-600 border-indigo-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100")}
+src/pages/Opportunities.tsx:                className={cn("py-1.5 text-xs font-bold rounded-lg border transition-all", remoteFilter === true ? "bg-indigo-600 border-indigo-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100")}
+src/pages/Opportunities.tsx:                className={cn("py-1.5 text-xs font-bold rounded-lg border transition-all", remoteFilter === false ? "bg-indigo-600 border-indigo-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100")}
+src/pages/Opportunities.tsx:              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 bg-slate-50 font-medium"
+src/pages/Opportunities.tsx:                <div key={i} className="h-72 rounded-2xl bg-slate-100 animate-pulse border border-slate-200" />
+src/pages/CounselorDashboard.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/CounselorDashboard.tsx:        <div className="shrink-0 bg-slate-800/40 border border-slate-700/60 p-6 rounded-2xl text-center shadow-xl">
+src/pages/CounselorDashboard.tsx:          <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center text-xs font-bold text-slate-400 uppercase tracking-widest px-6">
+src/pages/CounselorDashboard.tsx:              <div key={s.id} className="p-4 px-6 flex items-center text-sm font-medium hover:bg-slate-50/50 transition-colors">
+src/pages/CounselorDashboard.tsx:                    <span key={idx} className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 font-medium">{col}</span>
+src/pages/CounselorDashboard.tsx:                  <div className="h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden">
+src/pages/CounselorDashboard.tsx:                  <button className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700">
+src/pages/AchievementVault.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/AchievementVault.tsx:        <div className="shrink-0 bg-slate-800/40 border border-slate-700/60 p-6 rounded-2xl text-center shadow-xl">
+src/pages/AchievementVault.tsx:                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeFilter === filter ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+src/pages/AchievementVault.tsx:                  <div className={`p-3 rounded-xl shrink-0 ${ach.status === 'Verified' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+src/pages/AchievementVault.tsx:                  <button className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+src/pages/AchievementVault.tsx:              className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${dragActive ? 'border-indigo-600 bg-indigo-50/20' : 'border-slate-200 bg-slate-50'}`}
+src/pages/AchievementVault.tsx:                  <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+src/pages/DiscoveryDashboard.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/DiscoveryDashboard.tsx:        <div className="shrink-0 bg-slate-800/40 border border-slate-700/60 p-6 rounded-2xl text-center shadow-xl">
+src/pages/DiscoveryDashboard.tsx:                    <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded uppercase tracking-wider">{op.cost}</span>
+src/pages/CareerSimulator.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/CareerSimulator.tsx:          <button onClick={() => setSelectedCareer(null)} className="shrink-0 px-4 py-2.5 border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2">
+src/pages/CareerSimulator.tsx:                    <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded">{c.difficulty}</span>
+src/pages/CareerSimulator.tsx:                      <span key={idx} className="px-2 py-1 bg-slate-50 text-slate-500 text-[9px] font-bold rounded-md border border-slate-100">#{s}</span>
+src/pages/CareerSimulator.tsx:                          : "border-slate-200 hover:bg-slate-50 text-slate-700"
+src/pages/CareerSimulator.tsx:                        isChosen ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"
+src/pages/CareerSimulator.tsx:                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1"
+src/pages/CareerSimulator.tsx:                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+src/pages/CareerSimulator.tsx:                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+src/pages/CareerSimulator.tsx:                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+src/pages/Network.tsx:              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all ${activeTab === "feed" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10" : "text-slate-600 hover:bg-slate-50"}`}
+src/pages/Network.tsx:              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${activeTab === "network" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10" : "text-slate-600 hover:bg-slate-50"}`}
+src/pages/Network.tsx:              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all ${activeTab === "trending" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10" : "text-slate-600 hover:bg-slate-50"}`}
+src/pages/Network.tsx:              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all ${activeTab === "verify" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10" : "text-slate-600 hover:bg-slate-50"}`}
+src/pages/Network.tsx:              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${activeTab === "notifications" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10" : "text-slate-600 hover:bg-slate-50"}`}
+src/pages/Network.tsx:                        className="w-full bg-slate-50/50 border border-slate-200/80 rounded-2xl p-4 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[90px] resize-none"
+src/pages/Network.tsx:                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+src/pages/Network.tsx:                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+src/pages/Network.tsx:                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+src/pages/Network.tsx:                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+src/pages/Network.tsx:                            <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+src/pages/Network.tsx:                        <div className="bg-slate-100/80 px-2.5 py-1 rounded-lg text-[9px] font-black text-slate-600 uppercase tracking-wider border border-slate-200/50">
+src/pages/Network.tsx:                        <div className="border-t border-b border-slate-100 overflow-hidden bg-slate-50">
+src/pages/Network.tsx:                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all ${post.userReaction === "like" ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50"}`}
+src/pages/Network.tsx:                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all ${post.userReaction === "celebrate" ? "bg-amber-50 text-amber-600" : "hover:bg-slate-50"}`}
+src/pages/Network.tsx:                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all ${post.userReaction === "inspire" ? "bg-purple-50 text-purple-600" : "hover:bg-slate-50"}`}
+src/pages/Network.tsx:                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all ${post.userReaction === "support" ? "bg-rose-50 text-rose-600" : "hover:bg-slate-50"}`}
+src/pages/Network.tsx:                          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-slate-50 transition-all ${commentingPostId === post.id ? "text-indigo-600 bg-indigo-50/50" : ""}`}
+src/pages/Network.tsx:                            className="bg-slate-50/80 border-t border-slate-100 overflow-hidden"
+src/pages/Network.tsx:                  <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-6 text-center text-xs font-bold text-slate-400">
+src/pages/Network.tsx:                      <div key={req.id} className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+src/pages/Network.tsx:                        <div key={student.id} className="bg-slate-50/40 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+src/pages/Network.tsx:                              className="w-full inline-flex items-center justify-center gap-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-colors"
+src/pages/Network.tsx:                      <div key={student.id} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-2xl border border-slate-100 cursor-pointer" onClick={() => openStudentProfile(student.id)}>
+src/pages/Network.tsx:                      <div key={student.id} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-2xl border border-slate-100 cursor-pointer" onClick={() => openStudentProfile(student.id)}>
+src/pages/Network.tsx:                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+src/pages/Network.tsx:                      className="w-full bg-slate-50 border border-slate-200/80 rounded-xl p-4 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[90px] resize-none"
+src/pages/Network.tsx:              <div className="bg-slate-900 text-white rounded-3xl p-6 border border-slate-800 space-y-4">
+src/pages/Network.tsx:                      <div key={req.id} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 flex flex-col justify-between gap-3">
+src/pages/Network.tsx:          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+src/pages/Network.tsx:                      <div className="space-y-2 bg-slate-50/60 border border-slate-100 p-4 rounded-2xl">
+src/pages/Network.tsx:                                  <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider">{act.type}</span>
+src/pages/Network.tsx:                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs px-5 py-2.5 rounded-xl transition-colors"
+src/pages/Messages.tsx:        <div className="w-80 border-r border-slate-100 flex flex-col bg-slate-50/50">
+src/pages/Messages.tsx:                  activeChat === chat.id ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-slate-100 border border-transparent'
+src/pages/Messages.tsx:            <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-slate-50/30">
+src/pages/Messages.tsx:                    <div className={`w-8 h-8 rounded-full ${isMe ? 'bg-slate-200 text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-500 text-white'} shrink-0 flex items-center justify-center text-xs font-bold mt-auto`}>
+src/pages/Messages.tsx:                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+src/pages/Messages.tsx:          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
+src/pages/ApplicationTracker.tsx:            <button type="submit" className="w-full md:w-auto px-6 py-2 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800 transition-colors h-10">
+src/pages/ApplicationTracker.tsx:            <thead className="bg-slate-50 border-b border-slate-200 text-slate-900 font-semibold uppercase text-xs tracking-wider">
+src/pages/ApplicationTracker.tsx:                <tr key={app.id} className="hover:bg-slate-50 transition-colors">
+src/pages/OpportunityDetail.tsx:            <div className="rounded-xl border border-slate-100 bg-slate-50 p-6 space-y-4">
+src/pages/FounderMode.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/FounderMode.tsx:        <div className="shrink-0 bg-slate-800/40 border border-slate-700/60 p-6 rounded-2xl flex items-center gap-4 shadow-xl">
+src/pages/FounderMode.tsx:          <div className="grid grid-cols-4 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+src/pages/FounderMode.tsx:                      : "border-slate-200 bg-slate-50/50 hover:bg-slate-50 text-slate-950 font-medium"
+src/pages/DocumentUpload.tsx:      <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+src/pages/DocumentUpload.tsx:        <div className="shrink-0 bg-slate-800/60 border border-slate-700/60 p-6 rounded-2xl flex items-center gap-4 shadow-xl">
+src/pages/DocumentUpload.tsx:                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-500 group-hover:bg-indigo-50">
+src/pages/DocumentUpload.tsx:                  className="px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-all cursor-pointer"
+src/pages/DocumentUpload.tsx:            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
+src/pages/DocumentUpload.tsx:                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+src/pages/DocumentUpload.tsx:                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+src/pages/DocumentUpload.tsx:                    className="border border-slate-200/80 rounded-2xl p-5 hover:shadow-md transition-all space-y-4 bg-slate-50/30"
+src/components/ui/Input.tsx:            "w-full rounded-lg bg-slate-950 border border-slate-800 px-4 py-2 text-sm text-slate-100 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500",
+src/components/ui/Toast.tsx:        "flex items-center gap-3 bg-slate-900 border border-slate-800 border-l-4 p-4 rounded-lg shadow-lg mb-4 min-w-[300px]",
+src/components/ui/Skeleton.tsx:      className={cn("animate-pulse bg-slate-800 rounded-lg", className)}
+src/components/ui/Button.tsx:        ghost: "hover:bg-slate-100 text-slate-700",
+src/components/ui/Card.tsx:      default: "bg-slate-900 border border-slate-800 rounded-2xl",
+src/components/ui/Card.tsx:      elevated: "bg-slate-900 border border-slate-800 rounded-2xl shadow-xl",
+src/components/ui/Card.tsx:      interactive: "bg-slate-900 border border-slate-800 rounded-2xl transition-all hover:scale-[1.02] hover:shadow-indigo-500/20 hover:border-indigo-500/50",
+src/components/ui/Modal.tsx:              "fixed left-[5%] right-[5%] md:left-auto md:right-auto md:top-1/2 md:-translate-y-1/2 md:w-full md:max-w-lg bottom-5 md:bottom-auto bg-slate-900 border border-slate-800 rounded-2xl p-6 z-50",
+src/components/ErrorBoundary.tsx:        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+src/components/ErrorBoundary.tsx:              <div className="bg-slate-100 p-4 rounded-xl text-left overflow-auto max-h-32 border border-slate-200">
+src/components/Layout.tsx:      <div className="min-h-screen bg-slate-950 flex items-center justify-center animate-pulse" id="loading-spinner">
+src/components/Layout.tsx:    <div className={cn("min-h-screen font-sans flex text-slate-100", isDarkMode ? "bg-slate-950" : "bg-slate-50 text-slate-900")}>
+src/components/Layout.tsx:        className="hidden md:flex flex-col border-r border-slate-800/80 bg-slate-950 z-50 sticky top-0 h-screen"
+src/components/Layout.tsx:          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-800 rounded-lg">
+src/components/Layout.tsx:                      isActive ? "bg-indigo-600 text-white" : "text-slate-400 hover:bg-slate-900 hover:text-white"
+src/components/Layout.tsx:        <header className="sticky top-0 z-40 backdrop-blur-md bg-slate-950/80 border-b border-slate-800 p-4 flex items-center justify-between">
+src/components/Layout.tsx:                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-slate-800 rounded-full">
+src/components/Layout.tsx:                <button className="p-2 hover:bg-slate-800 rounded-full relative">
+src/components/Layout.tsx:                <button className="p-2 hover:bg-slate-800 rounded-full">
+src/components/EmptyState.tsx:      <div className={cn("flex flex-col items-center justify-center p-6 text-center bg-slate-50 border border-slate-200 border-dashed rounded-2xl", className)}>
+src/components/EmptyState.tsx:        variant === 'card' ? "p-8 bg-white border border-slate-200 rounded-3xl shadow-sm" : "py-24 bg-slate-50 rounded-3xl border border-slate-200 border-dashed",
+src/components/ResumeBuilderPanel.tsx:      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+src/components/OpportunityCard.tsx:          <span className="px-2 py-0.5 bg-slate-50 text-slate-600 text-[10px] font-bold rounded border border-slate-100">
+src/components/OpportunityCard.tsx:          className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors bg-white hover:bg-slate-50 rounded-full z-10 relative shadow-sm border border-slate-100 cursor-pointer"
+src/components/OpportunityCard.tsx:        <p className="text-[11px] text-slate-400 line-clamp-1 mb-3.5 italic bg-slate-50 px-2 py-1 rounded border border-slate-100">
+src/components/OpportunityCard.tsx:            matchScore && matchScore >= 85 ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-slate-900 text-white hover:bg-indigo-800"
+src/components/Dashboard/AICoachChat.tsx:    <div className="bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col relative">
+src/components/Dashboard/AICoachChat.tsx:      <div className="p-6 border-b border-slate-800/80 bg-slate-900/40 flex items-center gap-3 relative z-10">
+src/components/Dashboard/AICoachChat.tsx:                msg.role === "model" ? "bg-indigo-500" : "bg-slate-700"
+src/components/Dashboard/AICoachChat.tsx:                  ? "bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none"
+src/components/Dashboard/AICoachChat.tsx:      <div className="p-4 bg-slate-800/50 border-t border-slate-800">
+src/components/Dashboard/AICoachChat.tsx:            className="w-full bg-slate-900 border border-slate-700 text-white placeholder-slate-400 text-sm rounded-xl py-3 pl-4 pr-12 focus:outline-none focus:border-indigo-500 focus:bg-slate-800 focus:text-white transition-colors"
+src/components/TypingIndicator.tsx:    <div className="flex items-center gap-1.5 p-3 w-fit bg-slate-800 rounded-2xl rounded-tl-sm shadow-sm border border-slate-700/50">
+src/index.css:input.bg-white, input.bg-slate-50, input.bg-slate-100,
+src/index.css:textarea.bg-white, textarea.bg-slate-50, textarea.bg-slate-100,
+src/index.css:select.bg-white, select.bg-slate-50, select.bg-slate-100 {
+src/index.css:input.bg-slate-800, input.bg-slate-900, input.bg-slate-950,
+src/index.css:textarea.bg-slate-800, textarea.bg-slate-900, textarea.bg-slate-950,
+src/index.css:select.bg-slate-800, select.bg-slate-900, select.bg-slate-950 {

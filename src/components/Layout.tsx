@@ -1,5 +1,6 @@
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext.tsx";
+import { useTheme } from "./ThemeContext.tsx";
 import { 
   LogOut, LayoutDashboard, Search, User as UserIcon, 
   Map, Activity, Target, Briefcase, GraduationCap, 
@@ -17,14 +18,11 @@ import Onboarding from "../pages/Onboarding.tsx";
 
 export default function Layout() {
   const { user, signIn, logOut, appUser, isOfflineMode, loading } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(true);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDarkMode);
-  }, [isDarkMode]);
+  const isDarkMode = theme === "dark";
 
   if (loading) {
     return (
@@ -73,7 +71,7 @@ export default function Layout() {
   ];
 
   return (
-    <div className={cn("min-h-screen font-sans flex text-slate-100", isDarkMode ? "bg-slate-950" : "bg-slate-50 text-slate-900")}>
+    <div className="min-h-screen font-sans flex text-slate-100 bg-slate-950">
       
       {/* Sidebar */}
       <motion.aside 
@@ -131,7 +129,7 @@ export default function Layout() {
         <header className="sticky top-0 z-40 backdrop-blur-md bg-slate-950/80 border-b border-slate-800 p-4 flex items-center justify-between">
             <h1 className="text-lg font-bold capitalize">{location.pathname.replace('/', '') || 'Dashboard'}</h1>
             <div className="flex items-center gap-4">
-                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-slate-800 rounded-full">
+                <button onClick={toggleTheme} className="p-2 hover:bg-slate-800 rounded-full">
                     {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
                 </button>
                 <button className="p-2 hover:bg-slate-800 rounded-full relative">

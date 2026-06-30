@@ -9,6 +9,7 @@ import { AuthProvider } from "./components/AuthContext.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import Layout from "./components/Layout.tsx";
 import Landing from "./pages/Landing.tsx";
+import Login from "./pages/Login.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import Opportunities from "./pages/Opportunities.tsx";
 import OpportunityDetail from "./pages/OpportunityDetail.tsx";
@@ -36,6 +37,9 @@ import DiscoveryDashboard from "./pages/DiscoveryDashboard.tsx";
 import OpportunityMarketplace from "./pages/OpportunityMarketplace.tsx";
 import PortfolioBuilder from "./pages/PortfolioBuilder.tsx";
 import DocumentUpload from "./pages/DocumentUpload.tsx";
+import { ToastContainer } from "./components/ui/ToastContainer.tsx";
+
+import { ThemeProvider } from "./components/ThemeContext.tsx";
 
 const PageTransition = ({ children }: { children: React.ReactNode }) => (
   <motion.div
@@ -51,9 +55,12 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => (
 function AnimatedRoutes() {
   const location = useLocation();
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<Layout />}>
+    <>
+      <ToastContainer />
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
+          <Route path="/" element={<Layout />}>
           <Route index element={<PageTransition><Landing /></PageTransition>} />
           <Route path="messages" element={<PageTransition><Messages /></PageTransition>} />
           <Route path="dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
@@ -86,17 +93,20 @@ function AnimatedRoutes() {
         </Route>
       </Routes>
     </AnimatePresence>
+    </>
   );
 }
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <BrowserRouter>
-          <AnimatedRoutes />
-        </BrowserRouter>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <AnimatedRoutes />
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

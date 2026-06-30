@@ -5,6 +5,8 @@ import {
   RefreshCw, Award, Calendar, Building, Zap, Loader2, ChevronRight 
 } from "lucide-react";
 import { useAuth } from "../components/AuthContext.tsx";
+import { useConfetti } from "../hooks/useConfetti";
+import { useToast } from "../hooks/useToast";
 
 interface DocumentItem {
   id: number;
@@ -23,6 +25,8 @@ interface DocumentItem {
 
 export default function DocumentUpload() {
   const { appUser } = useAuth();
+  const { triggerConfetti } = useConfetti();
+  const { addToast } = useToast();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -55,9 +59,14 @@ export default function DocumentUpload() {
         if (res.ok) {
           const updatedDoc = await res.json();
           
-          setDocuments((prevDocs) =>
-            prevDocs.map((d) => (d.id === docId ? { ...d, ...updatedDoc } : d))
-          );
+          setDocuments((prevDocs) => {
+            const oldDoc = prevDocs.find(d => d.id === docId);
+            if (oldDoc && oldDoc.verificationStatus !== 'verified' && updatedDoc.verificationStatus === 'verified') {
+              triggerConfetti();
+              addToast('success', 'Document successfully verified!');
+            }
+            return prevDocs.map((d) => (d.id === docId ? { ...d, ...updatedDoc } : d));
+          });
 
           // Stop polling if status is terminal
           if (
@@ -75,7 +84,7 @@ export default function DocumentUpload() {
     }, 10000); // 10 seconds
 
     pollingIntervals.current[docId] = interval;
-  }, []);
+  }, [triggerConfetti, addToast]);
 
   // Sync active pollers based on document list
   useEffect(() => {

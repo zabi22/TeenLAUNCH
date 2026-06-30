@@ -118,7 +118,7 @@ export default function EssayAssistant() {
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
               placeholder="e.g., Some students have a background, identity, interest, or talent that is so meaningful they believe their application would be incomplete without it. If this sounds like you, then please share your story."
-              className="w-full min-h-[120px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none"
+              className="w-full min-h-[120px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none"
             ></textarea>
           </div>
 
@@ -135,7 +135,7 @@ export default function EssayAssistant() {
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
                 placeholder="Start typing your essay draft here..."
-                className="w-full flex-1 min-h-[300px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none mb-4"
+                className="w-full flex-1 min-h-[300px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none mb-4"
               ></textarea>
               
               <button

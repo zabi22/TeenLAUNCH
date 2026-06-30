@@ -1509,6 +1509,50 @@ Output MUST be a JSON object with this exact structure:
     }
   });
 
+  // Interview Prep API
+  app.post("/api/interview/analyze", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in.' });
+      
+      const { question, transcript } = req.body;
+      
+      if (!question || !transcript) {
+        return res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Missing inputs.' });
+      }
+
+      const systemInstruction = `You are an expert Ivy League alumni interviewer assessing a student's mock interview response.
+The student was asked: "${question}"
+Their verbal response (transcribed): "${transcript}"
+
+Analyze the response for structure, confidence indicators (lack of filler words, directness), clarity, and content strength (e.g., using STAR method).
+Output MUST be a valid JSON object:
+{
+  "feedback": "A concise paragraph summarizing how they did and highly actionable tips to improve (e.g. 'Use the STAR method').",
+  "confidence": <integer 0-100 based on tone and directness>,
+  "clarity": <integer 0-100 based on coherence and logical flow>,
+  "fillerWords": <integer representing approximate count of filler words found like 'um', 'like', 'you know'>
+}`;
+
+      const textResponse = await generateContentManager(
+        systemInstruction,
+        "Analyze the transcript and provide JSON output.",
+        true,
+        true // isComplex true for high thinking
+      );
+      
+      let parsed = { feedback: "Could not parse response.", confidence: 0, clarity: 0, fillerWords: 0 };
+      try {
+        parsed = cleanAndParseJson(textResponse);
+      } catch (e) {
+        console.error("Failed to parse interview analysis", e);
+      }
+
+      res.json(parsed);
+    } catch (error: any) {
+      res.status(500).json({ error_code: 'INTERNAL_SERVER_ERROR', user_friendly_message: 'Server error' });
+    }
+  });
+
   app.post("/api/essay/brainstorm", requireAuth, async (req: AuthRequest, res) => {
     try {
       if (!req.user) return res.status(401).json({ error_code: 'UNAUTHORIZED', user_friendly_message: 'You must be logged in to perform this action.' });

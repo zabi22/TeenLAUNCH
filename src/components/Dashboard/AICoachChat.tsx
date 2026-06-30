@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, memo } from "react";
 import { BrainCircuit, Send, User as UserIcon } from "lucide-react";
 import Markdown from "react-markdown";
 import { useAuth } from "../AuthContext.tsx";
+import { TypingIndicator } from "../TypingIndicator";
 
 export const AICoachChat = memo(function AICoachChat() {
   const { user, appUser } = useAuth();
@@ -120,11 +121,7 @@ export const AICoachChat = memo(function AICoachChat() {
             <div className="w-8 h-8 rounded-full bg-indigo-500 shrink-0 flex items-center justify-center">
               <BrainCircuit className="h-4 w-4 text-white" />
             </div>
-            <div className="bg-slate-800 border border-slate-700 text-slate-200 p-4 rounded-2xl rounded-tl-none text-sm flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
-              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-            </div>
+            <TypingIndicator />
           </div>
         )}
         <div ref={chatEndRef} />
@@ -138,7 +135,7 @@ export const AICoachChat = memo(function AICoachChat() {
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
             placeholder="Ask your AI mentor for advice..."
-            className="w-full bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-sm rounded-xl py-3 pl-4 pr-12 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-slate-900 border border-slate-700 text-white placeholder-slate-400 text-sm rounded-xl py-3 pl-4 pr-12 focus:outline-none focus:border-indigo-500 focus:bg-slate-800 focus:text-white transition-colors"
           />
           <button
             onClick={handleSendMessage}
